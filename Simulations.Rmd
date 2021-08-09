@@ -1,0 +1,439 @@
+---
+title: "Simulation"
+output:
+  html_document:
+    df_print: paged
+    keep_md: true
+  keep_md: true
+  html_notebook: default
+  pdf_document: default
+keep_md: true
+---
+
+```{r message=FALSE, warning=FALSE}
+library(deSolve)
+library(dplyr)
+library(ggplot2)
+```
+
+
+```{r}
+b1=function(t){
+  if (t<29){
+    b=0.2
+  }
+  if (t>=29){#& t<120){
+    b=0.75
+  }
+  if (t>155){
+    b=1.5
+  }
+  #if (t>=120){
+  #b=1.005
+  #}
+  return(b)
+}
+
+SEPIJARV=function(t,y,parms){
+  with(as.list(c(y,parms)),{
+
+    ro=(SDpar$stringency_index)/100
+    #print(ro[t+1])
+    b1=b1(t)
+    b2=0.6*b1
+    b3=0.8*b1
+    b4=0.8*b2
+    b5=0.05*b1
+    b6=0.05*b2
+    
+    dS=-(1-ro[t+1])*b1*S*(I+d*A)-(1-ro[t+1])*b2*S*(Iv+d*Av)-S*(b5*J+b6*Jv+b3*P+b4*Pv+v)
+    dE=(1-ro[t+1])*b1*S*(I+d*A)+(1-ro[t+1])*b2*S*(Iv+d*Av)+S*(b5*J+b6*Jv+b3*P+b4*Pv)+
+      (1-ro[t+1])*b1*Tv*(I+d*A)+(1-ro[t+1])*b2*Tv*(Iv+d*Av)+Tv*(b5*J+b6*Jv+b3*P+b4*Pv)-l*E
+    dP=l*E-k*P
+    dI=p*k*P-(1-u)*a1*I-u*g*I
+    dJ=u*g*I-a2*J+uA*g*A
+    dA=(1-p)*k*P-(1-uA)*n*A-uA*g*A
+    
+    dT=S*v-(1-ro[t+1])*b1*Tv*(I+d*A)-
+      (1-ro[t+1])*b2*Tv*(Iv+d*Av)- Tv*(b5*J+b6*Jv+b3*P+b4*Pv)-vaccdelay*Tv
+    dV=vaccdelay*Tv-(1-ro[t+1])*b1*V*(I+d*A)-(1-ro[t+1])*b2*V*(Iv+d*Av)-V*(b5*J+b6*Jv+b3*P+b4*Pv)
+    dEv=(1-ro[t+1])*b1*V*(I+d*A)+(1-ro[t+1])*b2*V*(Iv+d*Av)+V*(b5*J+b6*Jv+b3*P+b4*Pv)-lv*Ev
+    dPv=lv*Ev-kv*Pv
+    dIv=pv*kv*Pv-(1-uv)*a1*Iv-uv*gv*Iv
+    dJv=uv*gv*Iv-a2*Jv
+    dAv=(1-pv)*kv*Pv-n*Av
+    
+    dR=(1-uA)*n*A+(1-u)*a1*I+f*a2*J + n*Av+(1-uv)*a1*Iv+a2*Jv
+    dD=(1-f)*a2*J
+    
+    Dout=c(dS,dE,dP,dI,dJ,dA,dT,dV,dEv,dPv,dIv,dJv,dAv,dR,dD)
+    #print(sum(Dout))
+    return(list(Dout))
+  })
+}
+```
+
+```{r}
+E=7973/888000 #01/01/2021
+I=280/888000
+R=6845/888000
+Tv=0
+A=1200/888000
+V=0
+Ev=0
+Iv=0
+Av=0
+Jv=0
+J=2520/888000
+P=4000/888000
+Pv=0
+D=127/888000
+N=888000/888000
+y=c(S=N-E-P-I-J-A-Tv-V-Ev-Pv-Iv-Jv-Av-R-D, E=E, P=P, I=I,J=J, A=A, Tv=Tv, V=V, Ev=Ev, Pv=Pv, Iv=Iv, Jv=Jv, Av=Av, R=R, D=D)
+
+SDpar=read.csv('covid-stringency-index.csv')
+SDpar=SDpar %>% filter(Entity=='Cyprus', Day>='2021-01-01', Day<=	'2021-05-31')
+ro=(SDpar$stringency_index)/100
+#v=0.013
+parms=c(a1=1/5, a2=1/14, k=1/2,kv=1/2, 
+        d=0.60, n=1/6,  f=0.998, p=0.70, pv=0.15,
+        vaccdelay=1/14, u=0.9, uv=0.9,  uA=0.75,  g=1/3, gv=1/3, 
+        l=1/3.8, lv=1/3.8, v=0.013,
+        ro=ro )
+
+out0_013=as.data.frame(ode(y=y, parms=parms, times=seq(0,150),func = SEPIJARV, method='ode45'))
+print(matplot.0D(out0_013,legend=list(x='topright',cex=0.6)))#, which=c('E','P','I','A','R','Ev','Pv','Iv','Av')))
+```
+```{r}
+#out$I + (rpois(151,0.46)/888000)
+plot_simu_v_val=function(v_val, data){
+  gg1=ggplot(data,aes(x=time,y=variables,color=variable))+ labs(color='Compartments') +
+  geom_line(aes(y=as.numeric(E),col='Exposed')) +
+  geom_line(aes(y=as.numeric(P),col='Pre-Symptomatic'))+
+  geom_line(aes(y=as.numeric(I),col='Infective'))+
+  geom_line(aes(y=as.numeric(A),col='Asymptomatic'))+
+  geom_line(aes(y=as.numeric(J),col='Isolated'))+
+  geom_line(aes(y=as.numeric(Ev),col='V-Exposed'))+
+  geom_line(aes(y=as.numeric(Pv),col='V-Pre-Symptomatic'))+
+  geom_line(aes(y=as.numeric(Iv),col='V-Infective'))+
+  geom_line(aes(y=as.numeric(Jv),col='V-Isolated'))+
+  geom_line(aes(y=as.numeric(Av),col='V-Asymptomatic'))+
+    ggtitle(paste('Infected compartments of the SEPIJARV model for v=', v_val))+
+  theme(legend.key.size = unit(5, 'mm'), plot.title = element_text(size = unit(11,'cm')),
+        axis.text = element_text(size = unit(8,'cm')),
+        axis.title = element_text(size = unit(11,'cm')),
+        legend.text = element_text(size = unit(9, 'mm')),
+        legend.title =element_text(size = unit(9, 'mm')),
+        legend.position = 'right')+xlab('Number of days since the 01/01/2021')+
+  ylab('Size of each compartment')+geom_vline(xintercept = 29, col=1)
+
+  print(gg1)
+
+  gg2= ggplot(data,aes(x=time,y=variables,color=variable))+ labs(color='Compartments') +
+    geom_line(aes(y=as.numeric(E),col='Exposed')) +
+    geom_line(aes(y=as.numeric(P),col='Pre-Symptomatic'))+
+    geom_line(aes(y=as.numeric(I),col='Infective'))+
+    geom_line(aes(y=as.numeric(A),col='Asymptomatic'))+
+    geom_line(aes(y=as.numeric(J),col='Isolated'))+
+    geom_line(aes(y=as.numeric(Ev),col='V-Exposed'))+
+    geom_line(aes(y=as.numeric(Pv),col='V-Pre-Symptomatic'))+
+    geom_line(aes(y=as.numeric(Iv),col='V-Infective'))+
+    geom_line(aes(y=as.numeric(Jv),col='V-Isolated'))+
+    geom_line(aes(y=as.numeric(Av),col='V-Asymptomatic'))+
+    ggtitle(paste('Simulation from the SEPIJARV model for v=', v_val))+
+    geom_line(aes(y=as.numeric(D),col='Dead'))+
+    geom_line(aes(y=as.numeric(R),col='Recovered'))+
+    geom_line(aes(y=as.numeric(Tv),col='Treated'))+
+    geom_line(aes(y=as.numeric(V),col='Vaccinated'))+
+    geom_line(aes(y=as.numeric(S),col='Susceptible'))+
+    theme(legend.key.size = unit(5, 'mm'), plot.title = element_text(size = unit(11,'cm')),
+        axis.text = element_text(size = unit(8,'cm')),
+        axis.title = element_text(size = unit(11,'cm')),
+        legend.text = element_text(size = unit(9, 'mm')),
+        legend.title =element_text(size = unit(9, 'mm')),
+        legend.position = 'right')+xlab('Number of days since the 01/01/2021')+
+    ylab('Size of each compartment')+ geom_vline(xintercept = 29, col=1)
+  print(gg2)
+}
+
+#panel.background = element_blank(),
+#axis.line = element_line(colour = "grey"),
+#panel.grid.major = element_line(colour='grey'),
+#panel.grid.minor = element_line(colour='grey'),
+plot_simu_v_val(v_val=0.013,data=out0_013)
+
+```
+
+```{r}
+parms=c(a1=1/5, a2=1/14, k=1/2,kv=1/2, 
+        d=0.60, n=1/6,  f=0.998, p=0.70, pv=0.15,
+        vaccdelay=1/14, u=0.9, uv=0.9,  uA=0.75,  g=1/3, gv=1/3, 
+        l=1/3.8, lv=1/3.8, v=0.005,
+        ro=ro )
+
+out0_005=as.data.frame(ode(y=y, parms=parms, times=seq(0,150),func = SEPIJARV, method='ode45'))
+print(matplot.0D(out0_005,legend=list(x='topright',cex=0.6)))#, which=c('E','P','I','A','R','Ev','Pv','Iv','Av')))
+
+#out$I + (rpois(151,0.46)/888000)
+plot_simu_v_val(v_val=0.005, data=out0_005)
+```
+
+
+```{r}
+parms=c(a1=1/5, a2=1/14, k=1/2,kv=1/2, 
+        d=0.60, n=1/6,  f=0.998, p=0.70, pv=0.15,
+        vaccdelay=1/14, u=0.9, uv=0.9,  uA=0.75,  g=1/3, gv=1/3, 
+        l=1/3.8, lv=1/3.8, v=0.025,
+        ro=ro )
+
+out0_025=as.data.frame(ode(y=y, parms=parms, times=seq(0,150),func = SEPIJARV, method='ode45'))
+print(matplot.0D(out0_025,legend=list(x='topright',cex=0.6)))#, which=c('E','P','I','A','R','Ev','Pv','Iv','Av')))
+
+plot_simu_v_val(v_val=0.025, data=out0_025)
+```
+
+```{r eval=FALSE}
+#write.csv(out0_005,'Simu0_005.csv')
+#write.csv(out0_013,'Simu0_013.csv')
+#write.csv(out0_025,'Simu0_025.csv')
+```
+
+```{r}
+out0_005=read.csv('Simu0_005.csv')
+out0_013=read.csv('Simu0_013.csv')
+out0_025=read.csv('Simu0_025.csv')
+```
+
+
+```{r}
+FE=quote((1-ro)*b1*S*(I+d*A)+(1-ro)*b2*S*(Iv+d*Av)
+         +S*(b5*J+b6*Jv+b3*P+b4*Pv)+(1-ro)*b1*Tv*(I+d*A)
+         +(1-ro)*b2*Tv*(Iv+d*Av)+Tv*(b5*J+b6*Jv+b3*P+b4*Pv))
+FP=0
+FI=0
+FJ=0
+FA=0
+#FEv=quote((1-ro[t+1])*b1*V*(I+d*A)+
+            #(1-ro[t+1])*b2*V*(Iv+d*Av)+V*(b5*J+b6*Jv+b3*P+b4*Pv))
+FEv=quote((1-ro)*b1*V*(I+d*A)+
+            (1-ro)*b2*V*(Iv+d*Av)+V*(b5*J+b6*Jv+b3*P+b4*Pv))
+FPv=0
+FIv=0
+FJv=0
+FAv=0
+
+Ff=matrix(c(FE,FP,FI,FJ,FA,FEv,FPv,FIv,FJv,FAv), nrow=10)
+
+VnE=quote(l*E)
+VnP=quote(k*P)
+VnI=quote((1-u)*a1*I+u*g*I)
+VnJ=quote(a2*J)
+VnA=quote((1-uA)*n*A+uA*g*A)
+VnEv=quote(lv*Ev)
+VnPv=quote(kv*Pv)
+VnIv=quote((1-uv)*a1*Iv+uv*gv*Iv)
+VnJv=quote(a2*Jv)
+VnAv=quote(n*Av)
+
+
+VpE=0
+VpP=quote(l*E)
+VpI=quote(p*k*P)
+VpJ=quote(u*g*I+uA*g*A)
+VpA=quote((1-p)*k*P)
+VpEv=0
+VpPv=quote(lv*Ev)
+VpIv=quote(pv*kv*Pv)
+VpJv=quote(uv*gv*Iv)
+VpAv=quote((1-pv)*kv*Pv)
+
+VE=substitute(a-b, list(a=VnE, b=VpE))
+VP=substitute(a-b, list(a=VnP, b=VpP))
+VI=substitute(a-b, list(a=VnI, b=VpI))
+VJ=substitute(a-b, list(a=VnJ, b=VpJ))
+VA=substitute(a-b, list(a=VnA, b=VpA))
+VEv=substitute(a-b, list(a=VnEv, b=VpEv))
+VPv=substitute(a-b, list(a=VnPv, b=VpPv))
+VIv=substitute(a-b, list(a=VnIv, b=VpIv))
+VJv=substitute(a-b, list(a=VnJv, b=VpJv))
+VAv=substitute(a-b, list(a=VnAv, b=VpAv))
+
+fEE=D(FE,'E');fEP=D(FE,'P');fEI=D(FE,'I');fEJ=D(FE,'J');fEA=D(FE,'A');
+fPE=D(FP,'E');fPP=D(FP,'P');fPI=D(FP,'I');fPJ=D(FP,'J');fPA=D(FP,'A');
+fIE=D(FI,'E');fIP=D(FI,'P');fII=D(FI,'I');fIJ=D(FI,'J');fIA=D(FI,'A');
+fJE=D(FJ,'E');fJP=D(FJ,'P');fJI=D(FJ,'I');fJJ=D(FJ,'J');fJA=D(FJ,'A');
+fAE=D(FA,'E');fAP=D(FA,'P');fAI=D(FA,'I');fAJ=D(FA,'J');fAA=D(FA,'A');
+
+fEEv=D(FE,'Ev');fEPv=D(FE,'Pv');fEIv=D(FE,'Iv');fEJv=D(FE,'Jv');fEAv=D(FE,'Av');
+fPEv=D(FP,'Ev');fPPv=D(FP,'Pv');fPIv=D(FP,'Iv');fPJv=D(FP,'Jv');fPAv=D(FP,'Av');
+fIEv=D(FI,'Ev');fIPv=D(FI,'Pv');fIIv=D(FI,'Iv');fIJv=D(FI,'Jv');fIAv=D(FI,'Av');
+fJEv=D(FJ,'Ev');fJPv=D(FJ,'Pv');fJIv=D(FJ,'Iv');fJJv=D(FJ,'Jv');fJAv=D(FJ,'Av');
+fAEv=D(FA,'Ev');fAPv=D(FA,'Pv');fAIv=D(FA,'Iv');fAJv=D(FA,'Jv');fAAv=D(FA,'Av');
+
+fEvE=D(FEv,'E');fEvP=D(FEv,'P');fEvI=D(FEv,'I');fEvJ=D(FEv,'J');fEvA=D(FEv,'A');
+fPvE=D(FPv,'E');fPvP=D(FPv,'P');fPvI=D(FPv,'I');fPvJ=D(FPv,'J');fPvA=D(FPv,'A');
+fIvE=D(FIv,'E');fIvP=D(FIv,'P');fIvI=D(FIv,'I');fIvJ=D(FIv,'J');fIvA=D(FIv,'A');
+fJvE=D(FJv,'E');fJvP=D(FJv,'P');fJvI=D(FJv,'I');fJvJ=D(FJv,'J');fJvA=D(FJv,'A');
+fAvE=D(FAv,'E');fAvP=D(FAv,'P');fAvI=D(FAv,'I');fAvJ=D(FAv,'J');fAvA=D(FAv,'A');
+
+fEvEv=D(FEv,'Ev');fEvPv=D(FEv,'Pv');fEvIv=D(FEv,'Iv');fEvJv=D(FEv,'Jv');fEvAv=D(FEv,'Av');
+fPvEv=D(FPv,'Ev');fPvPv=D(FPv,'Pv');fPvIv=D(FPv,'Iv');fPvJv=D(FPv,'Jv');fPvAv=D(FPv,'Av');
+fIvEv=D(FIv,'Ev');fIvPv=D(FIv,'Pv');fIvIv=D(FIv,'Iv');fIvJv=D(FIv,'Jv');fIvAv=D(FIv,'Av');
+fJvEv=D(FJv,'Ev');fJvPv=D(FJv,'Pv');fJvIv=D(FJv,'Iv');fJvJv=D(FJv,'Jv');fJvAv=D(FJv,'Av');
+fAvEv=D(FAv,'Ev');fAvPv=D(FAv,'Pv');fAvIv=D(FAv,'Iv');fAvJv=D(FAv,'Jv');fAvAv=D(FAv,'Av');
+
+
+vEE=D(VE,'E');vEP=D(VE,'P');vEI=D(VE,'I');vEJ=D(VE,'J');vEA=D(VE,'A');
+vPE=D(VP,'E');vPP=D(VP,'P');vPI=D(VP,'I');vPJ=D(VP,'J');vPA=D(VP,'A');
+vIE=D(VI,'E');vIP=D(VI,'P');vII=D(VI,'I');vIJ=D(VI,'J');vIA=D(VI,'A');
+vJE=D(VJ,'E');vJP=D(VJ,'P');vJI=D(VJ,'I');vJJ=D(VJ,'J');vJA=D(VJ,'A');
+vAE=D(VA,'E');vAP=D(VA,'P');vAI=D(VA,'I');vAJ=D(VA,'J');vAA=D(VA,'A');
+
+vEEv=D(VE,'Ev');vEPv=D(VE,'Pv');vEIv=D(VE,'Iv');vEJv=D(VE,'Jv');vEAv=D(VE,'Av');
+vPEv=D(VP,'Ev');vPPv=D(VP,'Pv');vPIv=D(VP,'Iv');vPJv=D(VP,'Jv');vPAv=D(VP,'Av');
+vIEv=D(VI,'Ev');vIPv=D(VI,'Pv');vIIv=D(VI,'Iv');vIJv=D(VI,'Jv');vIAv=D(VI,'Av');
+vJEv=D(VJ,'Ev');vJPv=D(VJ,'Pv');vJIv=D(VJ,'Iv');vJJv=D(VJ,'Jv');vJAv=D(VJ,'Av');
+vAEv=D(VA,'Ev');vAPv=D(VA,'Pv');vAIv=D(VA,'Iv');vAJv=D(VA,'Jv');vAAv=D(VA,'Av');
+
+vEvE=D(VEv,'E');vEvP=D(VEv,'P');vEvI=D(VEv,'I');vEvJ=D(VEv,'J');vEvA=D(VEv,'A');
+vPvE=D(VPv,'E');vPvP=D(VPv,'P');vPvI=D(VPv,'I');vPvJ=D(VPv,'J');vPvA=D(VPv,'A');
+vIvE=D(VIv,'E');vIvP=D(VIv,'P');vIvI=D(VIv,'I');vIvJ=D(VIv,'J');vIvA=D(VIv,'A');
+vJvE=D(VJv,'E');vJvP=D(VJv,'P');vJvI=D(VJv,'I');vJvJ=D(VJv,'J');vJvA=D(VJv,'A');
+vAvE=D(VAv,'E');vAvP=D(VAv,'P');vAvI=D(VAv,'I');vAvJ=D(VAv,'J');vAvA=D(VAv,'A');
+
+vEvEv=D(VEv,'Ev');vEvPv=D(VEv,'Pv');vEvIv=D(VEv,'Iv');vEvJv=D(VEv,'Jv');vEvAv=D(VEv,'Av');
+vPvEv=D(VPv,'Ev');vPvPv=D(VPv,'Pv');vPvIv=D(VPv,'Iv');vPvJv=D(VPv,'Jv');vPvAv=D(VPv,'Av');
+vIvEv=D(VIv,'Ev');vIvPv=D(VIv,'Pv');vIvIv=D(VIv,'Iv');vIvJv=D(VIv,'Jv');vIvAv=D(VIv,'Av');
+vJvEv=D(VJv,'Ev');vJvPv=D(VJv,'Pv');vJvIv=D(VJv,'Iv');vJvJv=D(VJv,'Jv');vJvAv=D(VJv,'Av');
+vAvEv=D(VAv,'Ev');vAvPv=D(VAv,'Pv');vAvIv=D(VAv,'Iv');vAvJv=D(VAv,'Jv');vAvAv=D(VAv,'Av');
+
+y0=c(S=1,E=0,P=0, I=0,J=0, A=0, Tv=0, V=0, Ev=0, Pv=0, Iv=0, Jv=0, Av=0, R=0, D=0)
+
+SDpar=read.csv('covid-stringency-index.csv')
+SDpar=SDpar %>% filter(Entity=='Cyprus', Day>='2020-03-01', Day<=	'2021-05-31')
+ro=(SDpar$stringency_index)/100
+
+calc_Rt=function(v_value,data){
+  b=function(t){
+    if (t<29){
+      b=0.2
+    }
+    if (t>=29){
+      b=0.75
+    }
+    if (t>155){
+      b=1.5
+    }
+    return(b)
+  }
+  R0=numeric(151)
+  for (t in 1:151){
+
+    b1=b(t)
+    b2=0.6*b1
+    parameters=list(S=1,E=0,P=0, I=0,J=0, A=0, 
+                  Tv=0, V=0, Ev=0, Pv=0, 
+                  Iv=0, Jv=0, Av=0, R=0, D=0,
+                  a1=1/5, a2=1/14, k=1/2,kv=1/2,
+                  d=0.60, n=1/6,  f=0.998, p=0.70, pv=0.15,
+                  vaccdelay=1/14, u=0.9, uv=0.9,  uA=0.75, g=1/3, gv=1/3, 
+                  l=1/3.8, lv=1/3.8, v=v_value,
+                  ro=ro[t], b3=0.8*b1, b4=0.8*b2,
+                  b5=0.05*b1, b6=0.05*b2)
+  
+    f=with(parameters, matrix(c(eval(fEE),eval(fEP),eval(fEI),eval(fEJ),eval(fEA), 
+                              eval(fEEv),eval(fEPv),eval(fEIv),eval(fEJv),eval(fEAv), 
+                              eval(fPE),eval(fPP),eval(fPI),eval(fPJ),eval(fPA),
+                              eval(fPEv),eval(fPPv),eval(fPIv),eval(fPJv),eval(fPAv),
+                              eval(fIE),eval(fIP),eval(fII),eval(fIJ),eval(fIA),
+                              eval(fIEv),eval(fIPv),eval(fIIv),eval(fIJv),eval(fIAv),
+                              eval(fJE),eval(fJP),eval(fJI),eval(fJJ),eval(fJA),
+                              eval(fJEv),eval(fJPv),eval(fJIv),eval(fJJv),eval(fJAv),
+                              eval(fAE), eval(fAP),eval(fAI),eval(fAJ),eval(fAA),
+                              eval(fAEv), eval(fAPv),eval(fAIv),eval(fAJv),eval(fAAv),
+                              eval(fEvE),eval(fEvP),eval(fEvI),eval(fEvJ),eval(fEvA), 
+                              eval(fEvEv),eval(fEvPv),eval(fEvIv),eval(fEvJv),eval(fEvAv), 
+                              eval(fPvE),eval(fPvP),eval(fPvI), eval(fPvJ),eval(fPvA),
+                              eval(fPvEv),eval(fPvPv),eval(fPvIv),eval(fPvJv),eval(fPvAv),
+                              eval(fIvE),eval(fIvP),eval(fIvI),eval(fIvJ),eval(fIvA),
+                              eval(fIvEv),eval(fIvPv),eval(fIvIv),eval(fIvJv),eval(fIvAv),
+                              eval(fJvE), eval(fJvP),eval(fJvI),eval(fJvJ),eval(fJvA),
+                              eval(fJvEv),eval(fJvPv),eval(fJvIv),eval(fJvJv),eval(fJvAv),
+                              eval(fAvE), eval(fAvP),eval(fAvI),eval(fAvJ), eval(fAvA),
+                              eval(fAvEv), eval(fAvPv),eval(fAvIv),eval(fAvJv),eval(fAvAv)),
+                            nrow=10, byrow=TRUE))
+  
+    vv=with(parameters, matrix(c(eval(vEE),eval(vEP),eval(vEI),eval(vEJ),eval(vEA),
+                              eval(vEEv),eval(vEPv),eval(vEIv),eval(vEJv),eval(vEAv),
+                              eval(vPE),eval(vPP),eval(vPI),eval(vPJ),eval(vPA),
+                              eval(vPEv),eval(vPPv),eval(vPIv),eval(vPJv),eval(vPAv),
+                              eval(vIE),eval(vIP),eval(vII),eval(vIJ),eval(vIA),
+                              eval(vIEv),eval(vIPv),eval(vIIv),eval(vIJv),eval(vIAv),
+                              eval(vJE),eval(vJP),eval(vJI),eval(vJJ),eval(vJA),
+                              eval(vJEv),eval(vJPv),eval(vJIv),eval(vJJv),eval(vJAv),
+                              eval(vAE), eval(vAP),eval(vAI),eval(vAJ),eval(vAA),
+                              eval(vAEv), eval(vAPv),eval(vAIv),eval(vAJv),eval(vAAv),
+                              eval(vEvE),eval(vEvP),eval(vEvI),eval(vEvJ),eval(vEvA),
+                              eval(vEvEv),eval(vEvPv),eval(vEvIv),eval(vEvJv),eval(vEvAv),
+                              eval(vPvE),eval(vPvP),eval(vPvI), eval(vPvJ),eval(vPvA),
+                              eval(vPvEv),eval(vPvPv),eval(vPvIv),eval(vPvJv),eval(vPvAv),
+                              eval(vIvE),eval(vIvP),eval(vIvI),eval(vIvJ),eval(vIvA),
+                              eval(vIvEv),eval(vIvPv),eval(vIvIv),eval(vIvJv),eval(vIvAv),
+                              eval(vJvE),eval(vJvP),eval(vJvI),eval(vJvJ),eval(vJvA),
+                              eval(vJvEv),eval(vJvPv),eval(vJvIv),eval(vJvJv),eval(vJvAv),
+                              eval(vAvE), eval(vAvP),eval(vAvI),eval(vAvJ),eval(vAvA),
+                              eval(vAvEv),eval(vAvPv),eval(vAvIv),eval(vAvJv),eval(vAvAv)),
+                            nrow=10, byrow=TRUE))
+
+    
+    R0[t]=(max(eigen(f %*% solve(vv))$values))
+  }
+
+  Rt=(data$S + data$Tv+data$V)*R0
+  Rt=as.data.frame(Rt)
+  Rt$t=seq(1:151)
+  return(list(R0,Rt))
+}
+```
+
+```{r}
+Rt_005=calc_Rt(v_value=0.005, data=out0_005)[[2]]
+Rt_013=calc_Rt(v_value=0.013,data=out0_013)[[2]]
+Rt_025=calc_Rt(v_value=0.025, data=out0_025)[[2]]
+
+Rt=cbind(t=seq(1,151),v0_005=Rt_005$Rt,v0_013=Rt_013$Rt,v0_025=Rt_025$Rt)
+
+ggplot(as.data.frame(Rt), aes(x=t, y=variables, color=variable)) + labs(color='Vaccination rate')+geom_line(aes(y=v0_013, col='v=0.013'))+
+  geom_line(aes(y=v0_005, col='v=0.005'))+
+  geom_line(aes(y=v0_025, col='v=0.025'))+xlab('Days')+ggtitle('The time-varying R for three different vaccination rates') +geom_vline(xintercept = 29, col=1)+theme(legend.key.size = unit(5, 'mm'), plot.title = element_text(size = unit(11,'cm')),
+        axis.text = element_text(size = unit(8,'cm')),
+        axis.title = element_text(size = unit(11,'cm')),
+        legend.text = element_text(size = unit(9, 'mm')),
+        legend.title =element_text(size = unit(9, 'mm')),
+        legend.position = 'right')
+```
+
+```{r}
+Rt_005=calc_Rt(v_value=0.005, data=out0_005)[[1]]
+Rt_013=calc_Rt(v_value=0.013,data=out0_013)[[1]]
+Rt_025=calc_Rt(v_value=0.025, data=out0_025)[[1]]
+
+R0=cbind(t=seq(1,151),v0_005=Rt_005,v0_013=Rt_013,v0_025=Rt_025)
+
+ggplot(as.data.frame(R0), aes(x=t, y=variables, color=variable)) + labs(color='Vaccination rate')+geom_line(aes(y=v0_013, col='v=0.013'))+
+  geom_line(aes(y=v0_005, col='v=0.005'))+
+  geom_line(aes(y=v0_025, col='v=0.025'))+xlab('Days')+ggtitle('The basic reproduction number for three different vaccination rates')+geom_vline(xintercept = 29, col=1)+theme(legend.key.size = unit(5, 'mm'), plot.title = element_text(size = unit(11,'cm')),
+        axis.text = element_text(size = unit(8,'cm')),
+        axis.title = element_text(size = unit(11,'cm')),
+        legend.text = element_text(size = unit(9, 'mm')),
+        legend.title =element_text(size = unit(9, 'mm')),
+        legend.position = 'right')
+
+ggplot(data.frame(t=seq(1,151),y=ro[1:151]),aes(x=t, y=y))+geom_line()+ylab(expression(~rho))+xlab('Number of days since 01/01/2021') +ggtitle(expression('Plot of the parameter'~ rho))+theme(legend.key.size = unit(5, 'mm'), plot.title = element_text(size = unit(11,'cm')),
+        axis.text = element_text(size = unit(8,'cm')),
+        axis.title = element_text(size = unit(11,'cm')),
+        legend.text = element_text(size = unit(9, 'mm')),
+        legend.title =element_text(size = unit(9, 'mm')),
+        legend.position = 'right')
+```
+
