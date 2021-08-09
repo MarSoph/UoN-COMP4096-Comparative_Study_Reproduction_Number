@@ -1,4 +1,3 @@
-setwd("~/R/Research")
 library(DEoptim)
 library(Metrics)
 library(dplyr)
@@ -8,7 +7,7 @@ library(ggplot2)
 SDpar=read.csv('covid-stringency-index.csv')
 SDpar=SDpar %>% filter(Entity=='Cyprus', Day>='2021-01-01', Day<=	'2021-05-31')
 
-Optimisation=function(v_value, niter){
+Optimisation=function(v_value, niter, strat){
   SEPIJARV_opt=function(t,y,parms){
     a1_inv=parms[1]
     a1=1/a1_inv
@@ -148,11 +147,10 @@ Optimisation=function(v_value, niter){
     error=rmse(Simu$x, rep)
     return(error)
   }
-  #40, number of generations 500, rand/1/bin as
-  #the mutation mechanism
+
   lower=c(3,5,1,7,0.3,3,0.8,0,0,0,0,0,1,0.2,0,0,0,0,0)
   upper=c(7,15,7,15,1,9,1,1,1,1,1,1,3,5,1,1,1,1,1)
-  opt=DEoptim(ode_MSE ,lower,upper, control = list(strategy =1 ,itermax=niter,NP=200))
+  opt=DEoptim(ode_MSE ,lower,upper, control = list(strategy =strat ,itermax=niter,NP=200))
   
   
 
@@ -162,11 +160,8 @@ Optimisation=function(v_value, niter){
                             func = SEPIJARV_opt, 
                             parms=optimal_parms, 
                             method='ode45'))
-  #gg=plot_data(new_dat,
-               #given_title=paste('Optimised for v=',v_value))
-  #print(gg)
-  return(list(opt,new_dat,optimal_parms))
-  
+
+  return(list(opt,new_dat,optimal_parms)) 
 }
 
 DE_calc_Rt=function(v_value,data, x){
