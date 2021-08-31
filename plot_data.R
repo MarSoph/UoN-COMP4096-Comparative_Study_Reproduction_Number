@@ -1,4 +1,5 @@
 plot_data=function(data,given_title){
+  'Plots the full simulated data'
   gg=ggplot(data,aes(x=time,y=variables,color=variable))+ labs(color='Compartments') +
     geom_line(aes(y=as.numeric(E),col='Exposed')) +
     geom_line(aes(y=as.numeric(P),col='Pre-Symptomatic'))+
