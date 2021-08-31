@@ -20,5 +20,5 @@ parms=c(0.9,0.9,1/3,0.75)
 J0_013=adding_noise_to_J(data=out0_013, parms) 
 J0_005=adding_noise_to_J(data=out0_005, parms) 
 J0_025=adding_noise_to_J(data=out0_025, parms)
-
+#Each simulated dataset was saved into an .csv file for later use
 
