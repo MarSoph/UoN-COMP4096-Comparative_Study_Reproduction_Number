@@ -1,44 +1,26 @@
----
-title: "Simulation"
-output:
-  html_document:
-    df_print: paged
-    keep_md: true
-  keep_md: true
-  html_notebook: default
-  pdf_document: default
-keep_md: true
----
-
-```{r message=FALSE, warning=FALSE}
 library(deSolve)
 library(dplyr)
 library(ggplot2)
-```
-
 
 ```{r}
 b1=function(t){
   if (t<29){
     b=0.2
   }
-  if (t>=29){#& t<120){
+  if (t>=29){
     b=0.75
   }
   if (t>155){
     b=1.5
   }
-  #if (t>=120){
-  #b=1.005
-  #}
   return(b)
 }
 
 SEPIJARV=function(t,y,parms){
+  'The ODEs of the SEPIJARV model'
   with(as.list(c(y,parms)),{
 
     ro=(SDpar$stringency_index)/100
-    #print(ro[t+1])
     b1=b1(t)
     b2=0.6*b1
     b3=0.8*b1
@@ -94,7 +76,8 @@ y=c(S=N-E-P-I-J-A-Tv-V-Ev-Pv-Iv-Jv-Av-R-D, E=E, P=P, I=I,J=J, A=A, Tv=Tv, V=V, E
 SDpar=read.csv('covid-stringency-index.csv')
 SDpar=SDpar %>% filter(Entity=='Cyprus', Day>='2021-01-01', Day<=	'2021-05-31')
 ro=(SDpar$stringency_index)/100
-#v=0.013
+
+# --- Simulate data for v=0.013 ---#
 parms=c(a1=1/5, a2=1/14, k=1/2,kv=1/2, 
         d=0.60, n=1/6,  f=0.998, p=0.70, pv=0.15,
         vaccdelay=1/14, u=0.9, uv=0.9,  uA=0.75,  g=1/3, gv=1/3, 
@@ -102,30 +85,35 @@ parms=c(a1=1/5, a2=1/14, k=1/2,kv=1/2,
         ro=ro )
 
 out0_013=as.data.frame(ode(y=y, parms=parms, times=seq(0,150),func = SEPIJARV, method='ode45'))
-print(matplot.0D(out0_013,legend=list(x='topright',cex=0.6)))#, which=c('E','P','I','A','R','Ev','Pv','Iv','Av')))
+print(matplot.0D(out0_013,legend=list(x='topright',cex=0.6)))
 ```
 ```{r}
-#out$I + (rpois(151,0.46)/888000)
 plot_simu_v_val=function(v_val, data){
-  gg1=ggplot(data,aes(x=time,y=variables,color=variable))+ labs(color='Compartments') +
-  geom_line(aes(y=as.numeric(E),col='Exposed')) +
-  geom_line(aes(y=as.numeric(P),col='Pre-Symptomatic'))+
-  geom_line(aes(y=as.numeric(I),col='Infective'))+
-  geom_line(aes(y=as.numeric(A),col='Asymptomatic'))+
-  geom_line(aes(y=as.numeric(J),col='Isolated'))+
-  geom_line(aes(y=as.numeric(Ev),col='V-Exposed'))+
-  geom_line(aes(y=as.numeric(Pv),col='V-Pre-Symptomatic'))+
-  geom_line(aes(y=as.numeric(Iv),col='V-Infective'))+
-  geom_line(aes(y=as.numeric(Jv),col='V-Isolated'))+
-  geom_line(aes(y=as.numeric(Av),col='V-Asymptomatic'))+
+  'Plots the full simulated epidemiological data and the data 
+  from the compartments with infected individuals' 
+  gg1=ggplot(data,aes(x=time,y=variables,color=variable))+ 
+    labs(color='Compartments') +
+    geom_line(aes(y=as.numeric(E),col='Exposed')) +
+    geom_line(aes(y=as.numeric(P),col='Pre-Symptomatic'))+
+    geom_line(aes(y=as.numeric(I),col='Infective'))+
+    geom_line(aes(y=as.numeric(A),col='Asymptomatic'))+
+    geom_line(aes(y=as.numeric(J),col='Isolated'))+
+    geom_line(aes(y=as.numeric(Ev),col='V-Exposed'))+
+    geom_line(aes(y=as.numeric(Pv),col='V-Pre-Symptomatic'))+
+    geom_line(aes(y=as.numeric(Iv),col='V-Infective'))+
+    geom_line(aes(y=as.numeric(Jv),col='V-Isolated'))+
+    geom_line(aes(y=as.numeric(Av),col='V-Asymptomatic'))+
     ggtitle(paste('Infected compartments of the SEPIJARV model for v=', v_val))+
-  theme(legend.key.size = unit(5, 'mm'), plot.title = element_text(size = unit(11,'cm')),
+    theme(legend.key.size = unit(5, 'mm'), 
+          plot.title = element_text(size = unit(9,'cm')),
         axis.text = element_text(size = unit(8,'cm')),
-        axis.title = element_text(size = unit(11,'cm')),
-        legend.text = element_text(size = unit(9, 'mm')),
-        legend.title =element_text(size = unit(9, 'mm')),
-        legend.position = 'right')+xlab('Number of days since the 01/01/2021')+
-  ylab('Size of each compartment')+geom_vline(xintercept = 29, col=1)
+        axis.title = element_text(size = unit(9,'cm')),
+        legend.text = element_text(size = unit(8, 'mm')),
+        legend.title =element_text(size = unit(8, 'mm')),
+        legend.position = 'right')+
+    xlab('Number of days since the 01/01/2021')+
+    ylab('Proportion of the population')+
+    geom_vline(xintercept = 29, col=1)
 
   print(gg1)
 
@@ -146,25 +134,24 @@ plot_simu_v_val=function(v_val, data){
     geom_line(aes(y=as.numeric(Tv),col='Treated'))+
     geom_line(aes(y=as.numeric(V),col='Vaccinated'))+
     geom_line(aes(y=as.numeric(S),col='Susceptible'))+
-    theme(legend.key.size = unit(5, 'mm'), plot.title = element_text(size = unit(11,'cm')),
+    theme(legend.key.size = unit(5, 'mm'), 
+          plot.title = element_text(size = unit(9,'cm')),
         axis.text = element_text(size = unit(8,'cm')),
-        axis.title = element_text(size = unit(11,'cm')),
-        legend.text = element_text(size = unit(9, 'mm')),
-        legend.title =element_text(size = unit(9, 'mm')),
+        axis.title = element_text(size = unit(9,'cm')),
+        legend.text = element_text(size = unit(8, 'mm')),
+        legend.title =element_text(size = unit(8, 'mm')),
         legend.position = 'right')+xlab('Number of days since the 01/01/2021')+
-    ylab('Size of each compartment')+ geom_vline(xintercept = 29, col=1)
+    ylab('Proportion of the population')+ geom_vline(xintercept = 29, col=1)
   print(gg2)
+  return(list(gg1,gg2))
 }
 
-#panel.background = element_blank(),
-#axis.line = element_line(colour = "grey"),
-#panel.grid.major = element_line(colour='grey'),
-#panel.grid.minor = element_line(colour='grey'),
 plot_simu_v_val(v_val=0.013,data=out0_013)
 
 ```
 
 ```{r}
+# --- Simulate data for v=0.005---#
 parms=c(a1=1/5, a2=1/14, k=1/2,kv=1/2, 
         d=0.60, n=1/6,  f=0.998, p=0.70, pv=0.15,
         vaccdelay=1/14, u=0.9, uv=0.9,  uA=0.75,  g=1/3, gv=1/3, 
@@ -172,14 +159,13 @@ parms=c(a1=1/5, a2=1/14, k=1/2,kv=1/2,
         ro=ro )
 
 out0_005=as.data.frame(ode(y=y, parms=parms, times=seq(0,150),func = SEPIJARV, method='ode45'))
-print(matplot.0D(out0_005,legend=list(x='topright',cex=0.6)))#, which=c('E','P','I','A','R','Ev','Pv','Iv','Av')))
+print(matplot.0D(out0_005,legend=list(x='topright',cex=0.6)))
 
-#out$I + (rpois(151,0.46)/888000)
 plot_simu_v_val(v_val=0.005, data=out0_005)
 ```
 
-
 ```{r}
+## was not used at the end
 parms=c(a1=1/5, a2=1/14, k=1/2,kv=1/2, 
         d=0.60, n=1/6,  f=0.998, p=0.70, pv=0.15,
         vaccdelay=1/14, u=0.9, uv=0.9,  uA=0.75,  g=1/3, gv=1/3, 
@@ -187,9 +173,8 @@ parms=c(a1=1/5, a2=1/14, k=1/2,kv=1/2,
         ro=ro )
 
 out0_025=as.data.frame(ode(y=y, parms=parms, times=seq(0,150),func = SEPIJARV, method='ode45'))
-print(matplot.0D(out0_025,legend=list(x='topright',cex=0.6)))#, which=c('E','P','I','A','R','Ev','Pv','Iv','Av')))
+print(matplot.0D(out0_025,legend=list(x='topright',cex=0.6)))
 
-plot_simu_v_val(v_val=0.025, data=out0_025)
 ```
 
 ```{r eval=FALSE}
@@ -204,8 +189,30 @@ out0_013=read.csv('Simu0_013.csv')
 out0_025=read.csv('Simu0_025.csv')
 ```
 
+```{r}
+plot_simu_v_val(v_val=0.013, data=out0_013)[[1]]
+ggsave(file = "SimuIncData013.pdf", width = 5.30,height=3.5, units=c('in'))
+
+plot_simu_v_val(v_val=0.013, data=out0_013)[[2]]
+ggsave(file = "SimuAllData013.pdf", width = 5.30,height=3.5, units=c('in'))
+
+#ggarrange(V013[[2]], V013[[1]],labels = c('a','b'), common.legend = FALSE)
+#ggsave(file = "SimuData013.pdf", width = 7.30,height=3.5, units=c('in'))
+
+v005=plot_simu_v_val(v_val=0.005, data=out0_005)
+#ggarrange(V005[[2]], V005[[1]],labels = c('a','b'), common.legend = FALSE)
+#ggsave(file = "SimuData005.pdf", width = 7.30,height=3.5, units=c('in'))
+
+plot_simu_v_val(v_val=0.005, data=out0_005)[[1]]
+ggsave(file = "SimuIncData005.pdf", width = 5.30,height=3.5, units=c('in'))
+
+plot_simu_v_val(v_val=0.005, data=out0_005)[[2]]
+ggsave(file = "SimuAllData005.pdf", width = 5.30,height=3.5, units=c('in'))
+```
 
 ```{r}
+# Expressions same as in the DE file #
+## only minor changes in the function calculating Rt ##
 FE=quote((1-ro)*b1*S*(I+d*A)+(1-ro)*b2*S*(Iv+d*Av)
          +S*(b5*J+b6*Jv+b3*P+b4*Pv)+(1-ro)*b1*Tv*(I+d*A)
          +(1-ro)*b2*Tv*(Iv+d*Av)+Tv*(b5*J+b6*Jv+b3*P+b4*Pv))
@@ -321,9 +328,6 @@ calc_Rt=function(v_value,data){
     if (t>=29){
       b=0.75
     }
-    if (t>155){
-      b=1.5
-    }
     return(b)
   }
   R0=numeric(151)
@@ -392,14 +396,15 @@ calc_Rt=function(v_value,data){
   Rt=(data$S + data$Tv+data$V)*R0
   Rt=as.data.frame(Rt)
   Rt$t=seq(1:151)
-  return(list(R0,Rt))
+  return(list(R0,Rt, vv, f))
 }
 ```
 
 ```{r}
+# --- Calculating Rt from the different simulated data ---#
 Rt_005=calc_Rt(v_value=0.005, data=out0_005)[[2]]
 Rt_013=calc_Rt(v_value=0.013,data=out0_013)[[2]]
-Rt_025=calc_Rt(v_value=0.025, data=out0_025)[[2]]
+Rt_025=calc_Rt(v_value=0.025, data=out0_025)[[2]] #were not used!
 
 Rt=cbind(t=seq(1,151),v0_005=Rt_005$Rt,v0_013=Rt_013$Rt,v0_025=Rt_025$Rt)
 
@@ -414,22 +419,22 @@ ggplot(as.data.frame(Rt), aes(x=t, y=variables, color=variable)) + labs(color='V
 ```
 
 ```{r}
+# --- Plotting R0 for each simulated data ---#
 Rt_005=calc_Rt(v_value=0.005, data=out0_005)[[1]]
 Rt_013=calc_Rt(v_value=0.013,data=out0_013)[[1]]
 Rt_025=calc_Rt(v_value=0.025, data=out0_025)[[1]]
 
 R0=cbind(t=seq(1,151),v0_005=Rt_005,v0_013=Rt_013,v0_025=Rt_025)
 
-ggplot(as.data.frame(R0), aes(x=t, y=variables, color=variable)) + labs(color='Vaccination rate')+geom_line(aes(y=v0_013, col='v=0.013'))+
+ggplot(as.data.frame(R0), aes(x=t, y=variables, color=variable)) + labs(color='Vaccination rate')+
+  geom_line(aes(y=v0_013, col='v=0.013'))+
   geom_line(aes(y=v0_005, col='v=0.005'))+
-  geom_line(aes(y=v0_025, col='v=0.025'))+xlab('Days')+ggtitle('The basic reproduction number for three different vaccination rates')+geom_vline(xintercept = 29, col=1)+theme(legend.key.size = unit(5, 'mm'), plot.title = element_text(size = unit(11,'cm')),
-        axis.text = element_text(size = unit(8,'cm')),
-        axis.title = element_text(size = unit(11,'cm')),
-        legend.text = element_text(size = unit(9, 'mm')),
-        legend.title =element_text(size = unit(9, 'mm')),
-        legend.position = 'right')
-
-ggplot(data.frame(t=seq(1,151),y=ro[1:151]),aes(x=t, y=y))+geom_line()+ylab(expression(~rho))+xlab('Number of days since 01/01/2021') +ggtitle(expression('Plot of the parameter'~ rho))+theme(legend.key.size = unit(5, 'mm'), plot.title = element_text(size = unit(11,'cm')),
+  geom_line(aes(y=v0_025, col='v=0.025'))+
+  xlab('Days')+
+  ggtitle('The basic reproduction number for three different vaccination rates')+
+  geom_vline(xintercept = 29, col=1)+
+  theme(legend.key.size = unit(5, 'mm'), 
+        plot.title = element_text(size = unit(11,'cm')),
         axis.text = element_text(size = unit(8,'cm')),
         axis.title = element_text(size = unit(11,'cm')),
         legend.text = element_text(size = unit(9, 'mm')),
@@ -437,3 +442,59 @@ ggplot(data.frame(t=seq(1,151),y=ro[1:151]),aes(x=t, y=y))+geom_line()+ylab(expr
         legend.position = 'right')
 ```
 
+
+```{r}
+Rt=cbind(Rt013=read.csv('Rt_013.csv')[,1:2],
+         Rt005=read.csv('Rt_005.csv')$Rt)
+
+B=ggplot(as.data.frame(Rt), aes(x=Rt013.X, y=variables, color=variable))+
+  geom_line(aes(y=Rt013.Rt, col='v=0.013',linetype='v=0.013'))+
+  geom_line(aes(y=Rt005, col='v=0.005',linetype='v=0.005'))+
+  scale_color_manual(values=c("Blue","Black"))+
+  scale_linetype_manual(values = c(2,1))+
+  labs(linetype='Vaccination rate')+
+  xlab('Days')+
+  ylab('Reproduction number')+
+  guides(color=FALSE)+
+  ggtitle('The time-varying reproduction number of the simulated data')+
+  geom_vline(xintercept = 29, col=1)+
+  theme(legend.key.size = unit(5, 'mm'), 
+        plot.title = element_text(size = unit(8,'cm')),
+        axis.text = element_text(size = unit(8,'cm')),
+        axis.title = element_text(size = unit(9,'cm')),
+        legend.text = element_text(size = unit(9, 'mm')),
+        legend.title =element_text(size = unit(9, 'mm')),
+        legend.position = 'bottom')
+
+ggsave(file='Rtsimu.pdf', width = 7.50,height=3.3, units=c('in'))
+```
+
+```{r}
+# --- Plotting both Rt and simulated incidence data on a combined figure --- #
+simuInc=cbind(S013=read.csv('SimuNoisy0_013.csv'),
+              S005=read.csv('SimuNoisy0_005.csv')$x)
+
+A=ggplot(simuInc,aes(x=S013.X))+
+    geom_line(aes(y=S013.x, linetype='v=0.013', 
+                  col='v=0.013'))+
+    geom_line(aes(y=S005, linetype='v=0.005',
+                  col='v=0.005'))+
+    scale_color_manual(values=c("Blue","Black"))+
+    scale_linetype_manual(values = c(2,1))+
+    labs(linetype='Vaccination rate')+
+    ylab('Proportion on the population')+
+    guides(color=FALSE)+
+    xlab('Days')+
+    ggtitle(paste('The simulated incidence data'))+
+    theme(legend.key.size = unit(7, 'mm'), 
+          plot.title = element_text(size = unit(9,'cm')),
+          axis.text = element_text(size = unit(8,'cm')),
+          axis.title = element_text(size = unit(9,'cm')),
+          legend.text = element_text(size = unit(9, 'mm')),
+          legend.title =element_text(size = unit(9, 'mm')),
+          legend.position = 'bottom')
+
+ggsave(file='IncSimu.pdf', width = 7.50,height=3.3, units=c('in'))
+
+ggarrange(A,B,labels=c('a','b'), common.legend = TRUE, legend = 'bottom')
+ggsave(file='SimuIncRt.pdf', width = 7.35,height=3.3, units=c('in'))
