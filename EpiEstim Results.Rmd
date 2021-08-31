@@ -1,18 +1,4 @@
----
-title: "EpiEstim Results"
-author: "Marina Sofokleous"
-date: "17/08/2021"
-output:
-  pdf_document: default
-  html_document:
-    keep_md: yes
----
-
-```{r setup, include=FALSE, message=FALSE, warning=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
-```
-
-```{r Parametric}
+```{r Parameters and data}
 library(EpiEstim)
 library(ggplot2)
 library(ggpubr)
@@ -46,6 +32,8 @@ for (i in 1:151){
 SimuNotNoisy005=as.data.frame(Srep)
 names(SimuNotNoisy005)=c('x')
 
+
+
 #--- Functions using Parametric Serial Interval ---#
 Rt_daily=function(data, SI){
   t_start=seq(2, length(data$x)-1)
@@ -67,8 +55,11 @@ Rt_weekly=function(data, SI){
                   std_si = SI['sd'])))
 }
 ```
+
 ```{r}
 plot_R=function(Rt,v, step, noise){
+' Plots the rulting Rt values on the same figure as the true
+values and the ones obtained by DE'
   if (v==0.013){
     original=read.csv('Rt_013.csv')$Rt
     DE=read.csv('DERt013.csv')$Rt
@@ -93,8 +84,8 @@ plot_R=function(Rt,v, step, noise){
   Rt=cbind(Rt,original, DE)
   l=dim(Rt)[1]
   
-  Bias=mean(abs(Rt$Mean[3:l]-Rt$original[3:l]))
-  RMSE=rmse(Rt$original[3:l],Rt$Mean[3:l])
+  Bias=mean(abs(Rt$Mean[3:l]-Rt$original[3:l])) #mean absolute bias between estimated and tru Rt
+  RMSE=rmse(Rt$original[3:l],Rt$Mean[3:l]) #RMSE between estimated and tru Rt
   
   gg=ggplot(Rt, aes(x=t_start))+
     labs(color='R')+
@@ -123,8 +114,10 @@ plot_R=function(Rt,v, step, noise){
 
 
 ```{r message=FALSE, warning=FALSE}
-SI_Nishiura=c(mu=4.8, sd=2.3) #@Nishiura2020 
-SI_Du=c(mu=3.96, sd=4.75) #@Du2020
+SI_Nishiura=c(mu=4.8, sd=2.3) #Nishiura et al. (2020) 
+SI_Du=c(mu=3.96, sd=4.75) #Du et al. (2020)
+
+
 
 #---Commands---#
 ##-Daily and Weekly estimations using SI estimation from Nishiura et.al 2020-##
@@ -146,7 +139,9 @@ ggarrange(C[[3]],A[[3]],D[[3]],B[[3]],H[[3]],E[[3]],
           common.legend = TRUE, legend = "bottom", nrow=3, ncol=2)
 ggsave(file = "EpiEstim_Nishiura.pdf", width = 7.30,height=7.55, units=c('in'))
 
-##- Daily and Weekly estimations using SI estimation from Du et.al 2020 -##
+
+
+##--- Daily and Weekly estimations using SI estimation from Du et.al 2020 ---##
 Rt013_D=Rt_weekly(SimuNoisy013, SI_Du)
 Rt005_D=Rt_weekly(SimuNoisy005, SI_Du)
 
@@ -175,12 +170,12 @@ estimate_R_plots(Rt005D_D, what='R', type='l')
 ```
 
 ```{r}
-# given mean SI: 4.8 (95% CrI: 3.8,6.1) @Nishiura2020 given Weibull distribution
+# given mean SI: 4.8 (95% CrI: 3.8,6.1) Nishiura et al. (2020) given Weibull distribution
 # and SD: 2.3 (95% CrI: 1.6, 3.5) 
 
 #Normally distributed SI:
 ## mean: 3.96 (95% CI: 3.53, 4.39)
-## SD: 4.75 (95% CI: 4.46, 5.07) @Du2020
+## SD: 4.75 (95% CI: 4.46, 5.07) Du et al. (2020)
 
 #--- Functions using Uncertain Serial Interval ---#
 Rt_Unc_daily=function(data){
@@ -210,6 +205,7 @@ Rt_Unc_weekly=function(data){
 }
 ```
 
+
 ```{r}
 RtU013=Rt_Unc_weekly(SimuNoisy013)
 RtU005=Rt_Unc_weekly(SimuNoisy005)
@@ -230,6 +226,3 @@ ggarrange(C[[3]],A[[3]],D[[3]],B[[3]],H[[3]],E[[3]],
           nrow=3, ncol = 2)
 ggsave(file = "EpiEstim_Uncertain.pdf", width = 7.30,height=7.55, units=c('in'))
 ```
-
-
-
