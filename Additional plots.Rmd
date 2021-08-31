@@ -1,0 +1,61 @@
+---
+title: "Additional Plots"
+output: html_notebook
+---
+
+# Published data from Cyprus
+```{r}
+library(ggplot2)
+data=read.csv('CY Covid19 - AntigenTests Data.csv')[1:151,1:5]
+```
+```{r}
+data_day=data
+origin='2021-01-01'
+end='2021-05-30'
+data_day$Date=format(as.Date(data$Date), "%y/%m")
+data_day$Time=seq(as.Date(origin), as.Date(end), length.out=151)
+
+#Time=rep(seq(as.Date(origin), as.Date(end), length.out=10),each=15)
+
+labels=seq(as.Date(origin), as.Date(end), length.out=10)
+labels=format(labels, '%d/%m/%y')
+breaks=seq(1, 150, length.out=4)
+
+data_day= data_day[order(data_day$Date),]
+
+
+ggplot(data_day,aes(x=Time, y=Positive.Cases ))+
+  geom_col() +
+  xlab('Date')+
+  ylab('Number of new reported cases')+
+  ggtitle('Published Data - Republic of Cyprus')+
+  theme(legend.key.size = unit(5, 'mm'), 
+        plot.title = element_text(size = unit(11,'cm')),
+          axis.text = element_text(size = unit(9,'cm')),
+          axis.title = element_text(size = unit(11,'cm')),
+          legend.text = element_text(size = unit(9, 'mm')))
+
+ggsave(file = "Publishedata.pdf", width = 7.30,height=3.9, units=c('in'))
+
+
+```
+
+```{r}
+# --- Plotting parameter rho --- #
+SDpar=read.csv('covid-stringency-index.csv')
+SDpar=SDpar %>% filter(Entity=='Cyprus', Day>='2020-03-01', Day<=	'2021-05-31')
+ro=(SDpar$stringency_index)/100
+
+ggplot(data.frame(t=seq(1,151),y=ro[1:151]),aes(x=t, y=y))+
+  geom_line()+
+  ylab(expression(~rho(t)))+
+  xlab('Number of days since 01/01/2021') +
+  ggtitle(expression('Plot of the parameter'~ rho(t)))+theme(legend.key.size = unit(5, 'mm'), plot.title = element_text(size = unit(11,'cm')),
+        axis.text = element_text(size = unit(8,'cm')),
+        axis.title = element_text(size = unit(11,'cm')),
+        legend.text = element_text(size = unit(9, 'mm')),
+        legend.title =element_text(size = unit(9, 'mm')),
+        legend.position = 'right')
+ggsave(file='rhoplot.pdf', width = 7.50,height=3.3, units=c('in'))
+```
+
