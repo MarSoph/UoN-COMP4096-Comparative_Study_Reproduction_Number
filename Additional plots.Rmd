@@ -1,14 +1,11 @@
----
-title: "Additional Plots"
-output: html_notebook
----
-
-# Published data from Cyprus
+# Published data from the Republic of Cyprus
 ```{r}
 library(ggplot2)
 data=read.csv('CY Covid19 - AntigenTests Data.csv')[1:151,1:5]
 ```
 ```{r}
+#--- Plot of the published incidence data from Cyprus ---#
+
 data_day=data
 origin='2021-01-01'
 end='2021-05-30'
