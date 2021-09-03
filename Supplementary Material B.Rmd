@@ -1,0 +1,1458 @@
+---
+title: "Supplementary Material B"
+author: "Marina Sofokleous / 14309406"
+
+date: "01/09/2021"
+output:
+  pdf_document: 
+    toc: true
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.cap = TRUE, message = FALSE, warning = FALSE)
+```
+\newpage
+Supplementary Material B contains all the R code and results obtained by implementing three simpler models and exploring the resulting estimates of $R_t$ from the two methods, $EpiEstim$ and $DE$. 
+
+The three different models are the following:
+1. SEPIJAR - Includes no vaccinations, constant transsmition rates and does not take into account any control measures ($\rho$=0).\\
+2. SEPIJAR (b) - Includes no vaccinations, constant transsmition rates and takes into account the control measures taken ($\rho$ varies).\\
+3. SEPIJARV - Includes vaccinations with vaccination rate = 0.013, constant transsmition rates and takes into account the control measures taken ($\rho$ varies).\\
+
+All three models were used for data simulation and specifically, the methodology performed for the study, as described in the Methodology chapter, was repeated for each model. The same functions used for the main study (Supplementary Material A) are simply modified to account for the changes in the parameters and can be found in section \textit{Functions} in the Supplementary Material B. The results obtained each time are shown after each command. Finally, the discussion of the findings can be found in the Discussion chapter of the Dissertation. 
+
+```{r}
+library(deSolve)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(EpiEstim)
+library(Metrics)
+library(DEoptim)
+```
+
+
+# Functions
+
+## NGM Functions
+```{r Calc_Rt for the SEPIVARV model}
+FE=quote((1-ro)*b1*S*(I+d*A)+(1-ro)*b2*S*(Iv+d*Av)
+         +S*(b5*J+b6*Jv+b3*P+b4*Pv)+(1-ro)*b1*Tv*(I+d*A)
+         +(1-ro)*b2*Tv*(Iv+d*Av)+Tv*(b5*J+b6*Jv+b3*P+b4*Pv))
+FP=0
+FI=0
+FJ=0
+FA=0
+FEv=quote((1-ro)*b1*V*(I+d*A)+
+            (1-ro)*b2*V*(Iv+d*Av)+V*(b5*J+b6*Jv+b3*P+b4*Pv))
+FPv=0
+FIv=0
+FJv=0
+FAv=0
+
+Ff=matrix(c(FE,FP,FI,FJ,FA,FEv,FPv,FIv,FJv,FAv), nrow=10)
+
+VnE=quote(l*E)
+VnP=quote(k*P)
+VnI=quote((1-u)*a1*I+u*g*I)
+VnJ=quote(a2*J)
+VnA=quote((1-uA)*n*A+uA*g*A)
+VnEv=quote(lv*Ev)
+VnPv=quote(kv*Pv)
+VnIv=quote((1-uv)*a1*Iv+uv*gv*Iv)
+VnJv=quote(a2*Jv)
+VnAv=quote(n*Av)
+
+
+VpE=0
+VpP=quote(l*E)
+VpI=quote(p*k*P)
+VpJ=quote(u*g*I+uA*g*A)
+VpA=quote((1-p)*k*P)
+VpEv=0
+VpPv=quote(lv*Ev)
+VpIv=quote(pv*kv*Pv)
+VpJv=quote(uv*gv*Iv)
+VpAv=quote((1-pv)*kv*Pv)
+
+VE=substitute(a-b, list(a=VnE, b=VpE))
+VP=substitute(a-b, list(a=VnP, b=VpP))
+VI=substitute(a-b, list(a=VnI, b=VpI))
+VJ=substitute(a-b, list(a=VnJ, b=VpJ))
+VA=substitute(a-b, list(a=VnA, b=VpA))
+VEv=substitute(a-b, list(a=VnEv, b=VpEv))
+VPv=substitute(a-b, list(a=VnPv, b=VpPv))
+VIv=substitute(a-b, list(a=VnIv, b=VpIv))
+VJv=substitute(a-b, list(a=VnJv, b=VpJv))
+VAv=substitute(a-b, list(a=VnAv, b=VpAv))
+
+fEE=D(FE,'E');fEP=D(FE,'P');fEI=D(FE,'I');fEJ=D(FE,'J');fEA=D(FE,'A');
+fPE=D(FP,'E');fPP=D(FP,'P');fPI=D(FP,'I');fPJ=D(FP,'J');fPA=D(FP,'A');
+fIE=D(FI,'E');fIP=D(FI,'P');fII=D(FI,'I');fIJ=D(FI,'J');fIA=D(FI,'A');
+fJE=D(FJ,'E');fJP=D(FJ,'P');fJI=D(FJ,'I');fJJ=D(FJ,'J');fJA=D(FJ,'A');
+fAE=D(FA,'E');fAP=D(FA,'P');fAI=D(FA,'I');fAJ=D(FA,'J');fAA=D(FA,'A');
+
+fEEv=D(FE,'Ev');fEPv=D(FE,'Pv');fEIv=D(FE,'Iv');fEJv=D(FE,'Jv');fEAv=D(FE,'Av');
+fPEv=D(FP,'Ev');fPPv=D(FP,'Pv');fPIv=D(FP,'Iv');fPJv=D(FP,'Jv');fPAv=D(FP,'Av');
+fIEv=D(FI,'Ev');fIPv=D(FI,'Pv');fIIv=D(FI,'Iv');fIJv=D(FI,'Jv');fIAv=D(FI,'Av');
+fJEv=D(FJ,'Ev');fJPv=D(FJ,'Pv');fJIv=D(FJ,'Iv');fJJv=D(FJ,'Jv');fJAv=D(FJ,'Av');
+fAEv=D(FA,'Ev');fAPv=D(FA,'Pv');fAIv=D(FA,'Iv');fAJv=D(FA,'Jv');fAAv=D(FA,'Av');
+
+fEvE=D(FEv,'E');fEvP=D(FEv,'P');fEvI=D(FEv,'I');fEvJ=D(FEv,'J');fEvA=D(FEv,'A');
+fPvE=D(FPv,'E');fPvP=D(FPv,'P');fPvI=D(FPv,'I');fPvJ=D(FPv,'J');fPvA=D(FPv,'A');
+fIvE=D(FIv,'E');fIvP=D(FIv,'P');fIvI=D(FIv,'I');fIvJ=D(FIv,'J');fIvA=D(FIv,'A');
+fJvE=D(FJv,'E');fJvP=D(FJv,'P');fJvI=D(FJv,'I');fJvJ=D(FJv,'J');fJvA=D(FJv,'A');
+fAvE=D(FAv,'E');fAvP=D(FAv,'P');fAvI=D(FAv,'I');fAvJ=D(FAv,'J');fAvA=D(FAv,'A');
+
+fEvEv=D(FEv,'Ev');fEvPv=D(FEv,'Pv');fEvIv=D(FEv,'Iv');fEvJv=D(FEv,'Jv');fEvAv=D(FEv,'Av');
+fPvEv=D(FPv,'Ev');fPvPv=D(FPv,'Pv');fPvIv=D(FPv,'Iv');fPvJv=D(FPv,'Jv');fPvAv=D(FPv,'Av');
+fIvEv=D(FIv,'Ev');fIvPv=D(FIv,'Pv');fIvIv=D(FIv,'Iv');fIvJv=D(FIv,'Jv');fIvAv=D(FIv,'Av');
+fJvEv=D(FJv,'Ev');fJvPv=D(FJv,'Pv');fJvIv=D(FJv,'Iv');fJvJv=D(FJv,'Jv');fJvAv=D(FJv,'Av');
+fAvEv=D(FAv,'Ev');fAvPv=D(FAv,'Pv');fAvIv=D(FAv,'Iv');fAvJv=D(FAv,'Jv');fAvAv=D(FAv,'Av');
+
+
+vEE=D(VE,'E');vEP=D(VE,'P');vEI=D(VE,'I');vEJ=D(VE,'J');vEA=D(VE,'A');
+vPE=D(VP,'E');vPP=D(VP,'P');vPI=D(VP,'I');vPJ=D(VP,'J');vPA=D(VP,'A');
+vIE=D(VI,'E');vIP=D(VI,'P');vII=D(VI,'I');vIJ=D(VI,'J');vIA=D(VI,'A');
+vJE=D(VJ,'E');vJP=D(VJ,'P');vJI=D(VJ,'I');vJJ=D(VJ,'J');vJA=D(VJ,'A');
+vAE=D(VA,'E');vAP=D(VA,'P');vAI=D(VA,'I');vAJ=D(VA,'J');vAA=D(VA,'A');
+
+vEEv=D(VE,'Ev');vEPv=D(VE,'Pv');vEIv=D(VE,'Iv');vEJv=D(VE,'Jv');vEAv=D(VE,'Av');
+vPEv=D(VP,'Ev');vPPv=D(VP,'Pv');vPIv=D(VP,'Iv');vPJv=D(VP,'Jv');vPAv=D(VP,'Av');
+vIEv=D(VI,'Ev');vIPv=D(VI,'Pv');vIIv=D(VI,'Iv');vIJv=D(VI,'Jv');vIAv=D(VI,'Av');
+vJEv=D(VJ,'Ev');vJPv=D(VJ,'Pv');vJIv=D(VJ,'Iv');vJJv=D(VJ,'Jv');vJAv=D(VJ,'Av');
+vAEv=D(VA,'Ev');vAPv=D(VA,'Pv');vAIv=D(VA,'Iv');vAJv=D(VA,'Jv');vAAv=D(VA,'Av');
+
+vEvE=D(VEv,'E');vEvP=D(VEv,'P');vEvI=D(VEv,'I');vEvJ=D(VEv,'J');vEvA=D(VEv,'A');
+vPvE=D(VPv,'E');vPvP=D(VPv,'P');vPvI=D(VPv,'I');vPvJ=D(VPv,'J');vPvA=D(VPv,'A');
+vIvE=D(VIv,'E');vIvP=D(VIv,'P');vIvI=D(VIv,'I');vIvJ=D(VIv,'J');vIvA=D(VIv,'A');
+vJvE=D(VJv,'E');vJvP=D(VJv,'P');vJvI=D(VJv,'I');vJvJ=D(VJv,'J');vJvA=D(VJv,'A');
+vAvE=D(VAv,'E');vAvP=D(VAv,'P');vAvI=D(VAv,'I');vAvJ=D(VAv,'J');vAvA=D(VAv,'A');
+
+vEvEv=D(VEv,'Ev');vEvPv=D(VEv,'Pv');vEvIv=D(VEv,'Iv');vEvJv=D(VEv,'Jv');vEvAv=D(VEv,'Av');
+vPvEv=D(VPv,'Ev');vPvPv=D(VPv,'Pv');vPvIv=D(VPv,'Iv');vPvJv=D(VPv,'Jv');vPvAv=D(VPv,'Av');
+vIvEv=D(VIv,'Ev');vIvPv=D(VIv,'Pv');vIvIv=D(VIv,'Iv');vIvJv=D(VIv,'Jv');vIvAv=D(VIv,'Av');
+vJvEv=D(VJv,'Ev');vJvPv=D(VJv,'Pv');vJvIv=D(VJv,'Iv');vJvJv=D(VJv,'Jv');vJvAv=D(VJv,'Av');
+vAvEv=D(VAv,'Ev');vAvPv=D(VAv,'Pv');vAvIv=D(VAv,'Iv');vAvJv=D(VAv,'Jv');vAvAv=D(VAv,'Av');
+
+y0=c(S=1,E=0,P=0, I=0,J=0, A=0, Tv=0, V=0, Ev=0, Pv=0, Iv=0, Jv=0, Av=0, R=0, D=0)
+
+calc_Rt=function(v_value,data,ro){
+
+  Rt=numeric(151)
+  for (t in 1:151){
+
+    b1=0.3
+    b2=0.6*b1
+    parameters=list(S=data$S[t],E=data$E[t],P=data$P[t], I=data$I[t],
+                    J=data$J[t], A=data$A[t], 
+                  Tv=data$Tv[t], V=data$V[t], Ev=data$Ev[t], Pv=data$Pv[t], 
+                  Iv=data$Iv[t], Jv=data$Jv[t], Av=data$Av[t], 
+                  R=data$R[t], D=data$D[t],
+                  a1=1/5, a2=1/14, k=1/2,kv=1/2,
+                  d=0.60, n=1/6,  f=0.998, p=0.70, pv=0.15,
+                  vaccdelay=1/14, u=0.9, uv=0.9,  uA=0.75, g=1/3, gv=1/3, 
+                  l=1/3.8, lv=1/3.8, v=v_value,
+                  ro=ro[t], b3=0.8*b1, b4=0.8*b2,
+                  b5=0.05*b1, b6=0.05*b2)
+  
+    f=with(parameters, matrix(c(eval(fEE),eval(fEP),eval(fEI),eval(fEJ),eval(fEA), 
+                              eval(fEEv),eval(fEPv),eval(fEIv),eval(fEJv),eval(fEAv), 
+                              eval(fPE),eval(fPP),eval(fPI),eval(fPJ),eval(fPA),
+                              eval(fPEv),eval(fPPv),eval(fPIv),eval(fPJv),eval(fPAv),
+                              eval(fIE),eval(fIP),eval(fII),eval(fIJ),eval(fIA),
+                              eval(fIEv),eval(fIPv),eval(fIIv),eval(fIJv),eval(fIAv),
+                              eval(fJE),eval(fJP),eval(fJI),eval(fJJ),eval(fJA),
+                              eval(fJEv),eval(fJPv),eval(fJIv),eval(fJJv),eval(fJAv),
+                              eval(fAE), eval(fAP),eval(fAI),eval(fAJ),eval(fAA),
+                              eval(fAEv), eval(fAPv),eval(fAIv),eval(fAJv),eval(fAAv),
+                              eval(fEvE),eval(fEvP),eval(fEvI),eval(fEvJ),eval(fEvA), 
+                              eval(fEvEv),eval(fEvPv),eval(fEvIv),eval(fEvJv),eval(fEvAv), 
+                              eval(fPvE),eval(fPvP),eval(fPvI), eval(fPvJ),eval(fPvA),
+                              eval(fPvEv),eval(fPvPv),eval(fPvIv),eval(fPvJv),eval(fPvAv),
+                              eval(fIvE),eval(fIvP),eval(fIvI),eval(fIvJ),eval(fIvA),
+                              eval(fIvEv),eval(fIvPv),eval(fIvIv),eval(fIvJv),eval(fIvAv),
+                              eval(fJvE), eval(fJvP),eval(fJvI),eval(fJvJ),eval(fJvA),
+                              eval(fJvEv),eval(fJvPv),eval(fJvIv),eval(fJvJv),eval(fJvAv),
+                              eval(fAvE), eval(fAvP),eval(fAvI),eval(fAvJ), eval(fAvA),
+                              eval(fAvEv), eval(fAvPv),eval(fAvIv),eval(fAvJv),eval(fAvAv)),
+                            nrow=10, byrow=TRUE))
+  
+    vv=with(parameters, matrix(c(eval(vEE),eval(vEP),eval(vEI),eval(vEJ),eval(vEA),
+                              eval(vEEv),eval(vEPv),eval(vEIv),eval(vEJv),eval(vEAv),
+                              eval(vPE),eval(vPP),eval(vPI),eval(vPJ),eval(vPA),
+                              eval(vPEv),eval(vPPv),eval(vPIv),eval(vPJv),eval(vPAv),
+                              eval(vIE),eval(vIP),eval(vII),eval(vIJ),eval(vIA),
+                              eval(vIEv),eval(vIPv),eval(vIIv),eval(vIJv),eval(vIAv),
+                              eval(vJE),eval(vJP),eval(vJI),eval(vJJ),eval(vJA),
+                              eval(vJEv),eval(vJPv),eval(vJIv),eval(vJJv),eval(vJAv),
+                              eval(vAE), eval(vAP),eval(vAI),eval(vAJ),eval(vAA),
+                              eval(vAEv), eval(vAPv),eval(vAIv),eval(vAJv),eval(vAAv),
+                              eval(vEvE),eval(vEvP),eval(vEvI),eval(vEvJ),eval(vEvA),
+                              eval(vEvEv),eval(vEvPv),eval(vEvIv),eval(vEvJv),eval(vEvAv),
+                              eval(vPvE),eval(vPvP),eval(vPvI), eval(vPvJ),eval(vPvA),
+                              eval(vPvEv),eval(vPvPv),eval(vPvIv),eval(vPvJv),eval(vPvAv),
+                              eval(vIvE),eval(vIvP),eval(vIvI),eval(vIvJ),eval(vIvA),
+                              eval(vIvEv),eval(vIvPv),eval(vIvIv),eval(vIvJv),eval(vIvAv),
+                              eval(vJvE),eval(vJvP),eval(vJvI),eval(vJvJ),eval(vJvA),
+                              eval(vJvEv),eval(vJvPv),eval(vJvIv),eval(vJvJv),eval(vJvAv),
+                              eval(vAvE), eval(vAvP),eval(vAvI),eval(vAvJ),eval(vAvA),
+                              eval(vAvEv),eval(vAvPv),eval(vAvIv),eval(vAvJv),eval(vAvAv)),
+                            nrow=10, byrow=TRUE))
+
+    
+    Rt[t]=(max(eigen(f %*% solve(vv))$values))
+  }
+  R0=NA
+  Rt=as.data.frame(Rt)
+  Rt$t=seq(1:151)
+  return(list(R0,Rt, vv, f))
+}
+
+
+calc_Rt_noVacc=function(v_value,data,ro){
+
+  Rt=numeric(151)
+  for (t in 1:151){
+    #print(ro[t])
+    b1=0.3
+    b2=0.6*b1
+    parameters=list(S=data$S[t],E=data$E[t],P=data$P[t], I=data$I[t],
+                    J=data$J[t], A=data$A[t], 
+                  Tv=data$Tv[t], V=data$V[t], Ev=data$Ev[t], Pv=data$Pv[t], 
+                  Iv=data$Iv[t], Jv=data$Jv[t], Av=data$Av[t], 
+                  R=data$R[t], D=data$D[t],
+                  a1=1/5, a2=1/14, k=1/2,kv=1/2,
+                  d=0.60, n=1/6,  f=0.998, p=0.70, pv=0.15,
+                  vaccdelay=1/14, u=0.9, uv=0.9,  uA=0.75, 
+                  g=1/3, gv=1/3, 
+                  l=1/3.8, lv=1/3.8, v=v_value,
+                  ro=ro[t], b3=0.8*b1, b4=0.8*b2,
+                  b5=0.05*b1, b6=0.05*b2)
+  
+    f=with(parameters, matrix(c(eval(fEE),eval(fEP),eval(fEI),eval(fEJ),eval(fEA),
+                              eval(fPE),eval(fPP),eval(fPI),eval(fPJ),eval(fPA),
+                              eval(fIE),eval(fIP),eval(fII),eval(fIJ),eval(fIA),
+                              eval(fJE),eval(fJP),eval(fJI),eval(fJJ),eval(fJA),
+                              eval(fAE), eval(fAP),eval(fAI),eval(fAJ),eval(fAA)),
+                            nrow=5, byrow=TRUE))
+  
+    vv=with(parameters, matrix(c(eval(vEE),eval(vEP),eval(vEI),eval(vEJ),eval(vEA),
+                              eval(vPE),eval(vPP),eval(vPI),eval(vPJ),eval(vPA),
+                              eval(vIE),eval(vIP),eval(vII),eval(vIJ),eval(vIA),
+                              eval(vJE),eval(vJP),eval(vJI),eval(vJJ),eval(vJA),
+                              eval(vAE), eval(vAP),eval(vAI),eval(vAJ),eval(vAA)),
+                            nrow=5, byrow=TRUE))
+
+    Rt[t]=(max(eigen(f %*% solve(vv))$values))
+  }
+  R0=NA
+  Rt=as.data.frame(Rt)
+  Rt$t=seq(1:151)
+  return(list(R0,Rt))
+}
+```
+
+## Plots of data Functions
+```{r}
+plot_simu_v_val=function(v_val, data){
+  'Plots the full simulated epidemiological data and the data 
+  from the compartments with infected individuals' 
+  gg1=ggplot(data,aes(x=time,y=variables,color=variable))+ 
+    labs(color='Compartments') +
+    geom_line(aes(y=as.numeric(E),col='Exposed')) +
+    geom_line(aes(y=as.numeric(P),col='Pre-Symptomatic'))+
+    geom_line(aes(y=as.numeric(I),col='Infective'))+
+    geom_line(aes(y=as.numeric(A),col='Asymptomatic'))+
+    geom_line(aes(y=as.numeric(J),col='Isolated'))+
+    geom_line(aes(y=as.numeric(Ev),col='V-Exposed'))+
+    geom_line(aes(y=as.numeric(Pv),col='V-Pre-Symptomatic'))+
+    geom_line(aes(y=as.numeric(Iv),col='V-Infective'))+
+    geom_line(aes(y=as.numeric(Jv),col='V-Isolated'))+
+    geom_line(aes(y=as.numeric(Av),col='V-Asymptomatic'))+
+    ggtitle(paste('Infected compartments of the SEPIJARV model for v=', v_val))+
+    theme(legend.key.size = unit(3, 'mm'), 
+          plot.title = element_text(size = unit(7,'cm')),
+        axis.text = element_text(size = unit(7,'cm')),
+        axis.title = element_text(size = unit(7,'cm')),
+        legend.text = element_text(size = unit(5, 'mm')),
+        legend.title =element_text(size = unit(5, 'mm')),
+        legend.position = 'right')+
+    xlab('Number of days since the 01/01/2021')+
+    ylab('Proportion of the population')
+
+  #print(gg1)
+
+  gg2= ggplot(data,aes(x=time,y=variables,color=variable))+ labs(color='Compartments') +
+    geom_line(aes(y=as.numeric(E),col='Exposed')) +
+    geom_line(aes(y=as.numeric(P),col='Pre-Symptomatic'))+
+    geom_line(aes(y=as.numeric(I),col='Infective'))+
+    geom_line(aes(y=as.numeric(A),col='Asymptomatic'))+
+    geom_line(aes(y=as.numeric(J),col='Isolated'))+
+    geom_line(aes(y=as.numeric(Ev),col='V-Exposed'))+
+    geom_line(aes(y=as.numeric(Pv),col='V-Pre-Symptomatic'))+
+    geom_line(aes(y=as.numeric(Iv),col='V-Infective'))+
+    geom_line(aes(y=as.numeric(Jv),col='V-Isolated'))+
+    geom_line(aes(y=as.numeric(Av),col='V-Asymptomatic'))+
+    ggtitle(paste('Simulation from the SEPIJARV model for v=', v_val))+
+    geom_line(aes(y=as.numeric(D),col='Dead'))+
+    geom_line(aes(y=as.numeric(R),col='Recovered'))+
+    geom_line(aes(y=as.numeric(Tv),col='Treated'))+
+    geom_line(aes(y=as.numeric(V),col='Vaccinated'))+
+    geom_line(aes(y=as.numeric(S),col='Susceptible'))+
+    theme(legend.key.size = unit(3, 'mm'), 
+          plot.title = element_text(size = unit(7,'cm')),
+        axis.text = element_text(size = unit(7,'cm')),
+        axis.title = element_text(size = unit(7,'cm')),
+        legend.text = element_text(size = unit(5, 'mm')),
+        legend.title =element_text(size = unit(5, 'mm')),
+        legend.position = 'right')+xlab('Number of days since the 01/01/2021')+
+    ylab('Proportion of the population')
+  #print(gg2)
+  return(list(gg1,gg2))
+}
+```
+## Simulation Functions
+```{r}
+SEPIJARV=function(t,y,parms){
+  'The ODEs of the SEPIJARV model
+  with constant transmission rate'
+  with(as.list(c(y,parms)),{
+
+    ro=(SDpar$stringency_index)/100
+    b1=b1
+    b2=0.6*b1
+    b3=0.8*b1
+    b4=0.8*b2
+    b5=0.05*b1
+    b6=0.05*b2
+    
+    dS=-(1-ro[t+1])*b1*S*(I+d*A)-(1-ro[t+1])*b2*S*(Iv+d*Av)-S*(b5*J+b6*Jv+b3*P+b4*Pv+v)
+    dE=(1-ro[t+1])*b1*S*(I+d*A)+(1-ro[t+1])*b2*S*(Iv+d*Av)+S*(b5*J+b6*Jv+b3*P+b4*Pv)+
+      (1-ro[t+1])*b1*Tv*(I+d*A)+(1-ro[t+1])*b2*Tv*(Iv+d*Av)+Tv*(b5*J+b6*Jv+b3*P+b4*Pv)-l*E
+    dP=l*E-k*P
+    dI=p*k*P-(1-u)*a1*I-u*g*I
+    dJ=u*g*I-a2*J+uA*g*A
+    dA=(1-p)*k*P-(1-uA)*n*A-uA*g*A
+    
+    dT=S*v-(1-ro[t+1])*b1*Tv*(I+d*A)-
+      (1-ro[t+1])*b2*Tv*(Iv+d*Av)- Tv*(b5*J+b6*Jv+b3*P+b4*Pv)-vaccdelay*Tv
+    dV=vaccdelay*Tv-(1-ro[t+1])*b1*V*(I+d*A)-(1-ro[t+1])*b2*V*(Iv+d*Av)-V*(b5*J+b6*Jv+b3*P+b4*Pv)
+    dEv=(1-ro[t+1])*b1*V*(I+d*A)+(1-ro[t+1])*b2*V*(Iv+d*Av)+V*(b5*J+b6*Jv+b3*P+b4*Pv)-lv*Ev
+    dPv=lv*Ev-kv*Pv
+    dIv=pv*kv*Pv-(1-uv)*a1*Iv-uv*gv*Iv
+    dJv=uv*gv*Iv-a2*Jv
+    dAv=(1-pv)*kv*Pv-n*Av
+    
+    dR=(1-uA)*n*A+(1-u)*a1*I+f*a2*J + n*Av+(1-uv)*a1*Iv+a2*Jv
+    dD=(1-f)*a2*J
+    
+    Dout=c(dS,dE,dP,dI,dJ,dA,dT,dV,dEv,dPv,dIv,dJv,dAv,dR,dD)
+    #print(sum(Dout))
+    return(list(Dout))
+  })
+}
+```
+
+## EpiEstim functions
+
+```{r}
+plot_R=function(Rt,v=0, step, noise, data_R){
+  original=data_R
+  DE=numeric(151)
+  if (step=='Weekly'){
+    original=original[7:151,1]
+    DE=DE[7:151]
+  }
+  if (step=='Daily'){
+    original=original[2:151,1]
+    DE=DE[2:151]
+  }
+  
+  Rt=as.data.frame(Rt[['R']])
+  names(Rt)=c('t_start','t_end','Mean','Std','Q0.025',
+              'Q0.05','Q0.25','Median','Q0.75','Q0.95','Q0.975')
+  Rt=cbind(Rt,original, DE)
+  l=dim(Rt)[1]
+  
+  Bias=mean(abs(Rt$Mean[3:l]-Rt$original[3:l]))
+  RMSE=rmse(Rt$original[3:l],Rt$Mean[3:l])
+  
+  gg=ggplot(Rt, aes(x=t_start))+
+    labs(color='R')+
+    geom_line(aes(y=Mean,col='Estimated Mean (EpiEstim)'))+
+    geom_ribbon(aes(ymin=Q0.025, ymax=Q0.975),
+                alpha=0.3)+
+    geom_line(aes(y=original, col='Simulated'))+
+    geom_line(aes(y=DE, col='DE estimates'))+
+    xlab('Days')+
+    ylab('Time-Varying R')+
+    ggtitle(paste(step,'estimations / v=',v, '/',noise,'noise'))+
+    scale_color_manual(values=c("#009E73","Blue","Black"))+
+    theme(legend.key.size = unit(5, 'mm'), 
+          plot.title = element_text(size = unit(7,'cm')),
+          axis.text = element_text(size = unit(7,'cm')),
+          axis.title = element_text(size = unit(9,'cm')),
+          legend.text = element_text(size = unit(9, 'mm')),
+          legend.title =element_text(size = unit(9, 'mm')),
+          legend.position = 'bottom')
+  #plot(gg)
+  print(Bias)
+  print(RMSE)
+  return(list(Bias,RMSE, gg))
+}
+```
+```{r}
+#--- Functions using Uncertain Serial Interval ---#
+Rt_Unc_daily=function(data){ 
+  #Using Serial Interval estimates given by Nishiura et. al 2020
+  t_start=seq(2, length(data$x)-1)
+  t_end=t_start+1
+  Rt=estimate_R(incid=data$x*888000,
+                method = "uncertain_si",
+                config = make_config(list(
+                mean_si = 4.8, std_mean_si = 1,
+                min_mean_si = 3.8, max_mean_si = 5.8,
+                std_si = 2.3, std_std_si = 0.5,
+                min_std_si = 1.1, max_std_si = 3.5,
+                n1 = 100, n2 = 100,
+                t_start=t_start, 
+                t_end =t_end)))
+  return(Rt)
+}
+
+Rt_Unc_weekly=function(data){
+  Rt=estimate_R(incid=data$x*888000,
+                method = "uncertain_si",
+                config = make_config(list(
+                mean_si = 4.8, std_mean_si = 1,
+                min_mean_si = 3.8, max_mean_si = 5.8,
+                std_si = 2.3, std_std_si = 0.5,
+                min_std_si = 1.1, max_std_si = 3.5,
+                n1 = 100, n2 = 100)))
+  return(Rt)
+}
+```
+
+
+## DE with no vaccinations / Functions
+
+```{r}
+SEPIJAR_opt=function(t,y,parms){ 
+    'function including the ODEs of the compartmental model - 
+      same ODEs as the ones used for the simulation.'
+    a1_inv=parms[1]
+    a1=1/a1_inv
+    a2_inv=parms[2]
+    a2=1/a2_inv
+    k_inv=parms[3]
+    k=1/k_inv
+    kv=0
+    vaccdelay_inv=0
+    vaccdelay=0
+    d=parms[4]
+    n_inv=parms[5]
+    n=1/n_inv
+    nv=0
+    f=parms[6]
+    p=parms[7]
+    pv=0
+    u=parms[8]
+    uv=0
+    uA=parms[9]
+    g=parms[10]
+    gv=0
+    l_inv=parms[11]
+    l=1/l_inv
+    lv=0
+    v=v_value
+    b=parms[12]
+    b1=b
+    db2=0
+    b2=db2*b1
+    db3=parms[13]
+    b3=db3*b1
+    db4=0
+    b4=db4*b2
+    db5=parms[14] 
+    b5=db5*b1
+    db6=0
+    b6=db6*b2
+    ro=(SDpar$stringency_index)/100
+    with(as.list(y),{
+      
+      dS=-(1-ro[t+1])*b*S*(I+d*A)-(1-ro[t+1])*b2*S*(Iv+d*Av)-
+        S*(b5*J+b6*Jv+b3*P+b4*Pv+v)
+      dE=(1-ro[t+1])*b*S*(I+d*A)+(1-ro[t+1])*b2*S*(Iv+d*Av)+
+        S*(b5*J+b6*Jv+b3*P+b4*Pv)+
+        (1-ro[t+1])*b*Tv*(I+d*A)+(1-ro[t+1])*b2*Tv*(Iv+d*Av)+
+        Tv*(b5*J+b6*Jv+b3*P+b4*Pv)-l*E
+      dP=l*E-k*P
+      dI=p*k*P-(1-u)*a1*I-u*g*I
+      dJ=u*g*I-a2*J+uA*g*A
+      dA=(1-p)*k*P-(1-uA)*n*A-uA*g*A
+      
+      dT=S*v-(1-ro[t+1])*b*Tv*(I+d*A)-
+        (1-ro[t+1])*b2*Tv*(Iv+d*Av)- Tv*(b5*J+b6*Jv+b3*P+b4*Pv)-vaccdelay*Tv
+      dV=vaccdelay*Tv-(1-ro[t+1])*b*V*(I+d*A)-(1-ro[t+1])*b2*V*(Iv+d*Av)-
+        V*(b5*J+b6*Jv+b3*P+b4*Pv)
+      dEv=(1-ro[t+1])*b*V*(I+d*A)+(1-ro[t+1])*b2*V*(Iv+d*Av)+
+        V*(b5*J+b6*Jv+b3*P+b4*Pv)-lv*Ev
+      dPv=lv*Ev-kv*Pv
+      dIv=pv*kv*Pv-(1-uv)*a1*Iv-uv*gv*Iv
+      dJv=uv*gv*Iv-a2*Jv
+      dAv=(1-pv)*kv*Pv-n*Av
+      dR=(1-uA)*n*A+(1-u)*a1*I+f*a2*J + n*Av+(1-uv)*a1*Iv+a2*Jv
+      dD=(1-f)*a2*J
+      
+      Dout=c(dS,dE,dP,dI,dJ,dA,dT,dV,dEv,dPv,dIv,dJv,dAv,dR,dD)
+      #print(sum(Dout))
+      return(list(Dout))
+    })
+}
+
+
+OptimisationSimple_noVacc=function(v_value=0, niter, Data){
+  
+  ode_MSE=function(x, y0=y0){
+    'The objective function of the DE optimisation - 
+      The RMSE error between the simulated data and the data produced 
+        using the parameter vectors given in each generation of DE.'
+    a1_inv=x[1]
+    a1=1/a1_inv
+    a2_inv=x[2]
+    a2=1/a2_inv
+    k_inv=x[3]
+    k=1/k_inv
+    kv=0
+    vaccdelay_inv=0
+    vaccdelay=0
+    d=x[4]
+    n_inv=x[5]
+    n=1/n_inv
+    nv=0
+    f=x[6]
+    p=x[7]
+    pv=0
+    u=x[8]
+    uv=0
+    uA=x[9]
+    g=x[10]
+    gv=0
+    l_inv=x[11]
+    l=1/l_inv
+    lv=0
+    v=v_value
+    b=x[12]
+    b1=b
+    db2=0
+    b2=db2*b1
+    db3=x[13]
+    b3=db3*b1
+    db4=0
+    b4=db4*b2
+    db5=x[14] 
+    b5=db5*b1
+    db6=0
+    b6=db6*b2
+    
+    #The simulated data
+    Simu=Data$x #the noisy simulated data
+      
+    #Initial Values/ Sizes of each compartment starting on 01/01/2021
+    E=7973/888000 
+    I=280/888000
+    R=6845/888000
+    Tv=0
+    A=1200/888000
+    V=0
+    Ev=0
+    Iv=0
+    Av=0
+    Jv=0
+    J=2520/888000
+    P=4000/888000
+    Pv=0
+    D=127/888000
+    N=888000/888000
+    y0=c(S=N-E-P-I-J-A-Tv-V-Ev-Pv-Iv-Jv-Av-R-D,E=E,
+         P=P, I=I,J=J, A=A, Tv=Tv, V=V, Ev=Ev,
+         Pv=Pv, Iv=Iv, Jv=Jv, Av=Av, R=R, D=D)
+    
+    out=ode(y=y0,times=seq(0,150, by=1),func = SEPIJAR_opt, parms=x, 
+            method='ode45') #function to solve the ODEs given in SEPIJARV_opt
+    out=as.data.frame(out)
+    #generating the incidence data from data given by 'out'
+    rep=numeric(151)
+    for (i in 1:151){
+      rep[i+1]=u*g*out$I[i]+uA*g*out$A[i]+uv*g*out$Iv[i]
+    }
+    error=rmse(Simu, rep) #RMSE between the original simulated incidence data 
+    return(error)          #and the incidence data generated using the parameter 
+  }                         #vector from the current generation
+  #    parms=c(a1inv,a2inv,kinv,d, ninv, f, p,u, uA, g, linv,, b,db3, db5)
+  #lower limit of each parameter
+  lower=c(3,5,1,0.3,3,0.8,0,0,0,0,1,0.2,0,0)
+  #upper limit of each parameter
+  upper=c(7,15,7,1,9,1,1,1,1,1,3,5,1,1)
+  
+  #Running DEoptim command to find optimal parameters 
+   #using strategy 2: DE/local-to-best/1/bin
+  opt=DEoptim(ode_MSE ,lower,upper, 
+              control = list(strategy =2 ,itermax=niter,NP=200)) 
+  
+  
+  optimal_parms=opt[['optim']][["bestmem"]]
+  names(optimal_parms)=c('a1_inv','a2_inv','k_inv',
+                         'd','n_inv','f','p','u','uA','g','l_inv',
+                         'b','b3','b5')
+  new_dat=as.data.frame(ode(y=y0,times=seq(0,150, by=1),
+                            func = SEPIJAR_opt, 
+                            parms=optimal_parms, 
+                            method='ode45')) #calculate the data using the 
+                                              #parameters given by DE
+
+  return(list(opt,new_dat,optimal_parms))
+}
+
+Simpler_DE_calc_Rt_noVacc=function(v_value,data, x){
+'Calculates R0 and Rt for the data given by DE using the Next Generation Matrix'
+  Rt=numeric(151)
+  for (t in 1:151){
+    a1_inv=x[1]
+    a1=1/a1_inv
+    a2_inv=x[2]
+    a2=1/a2_inv
+    k_inv=x[3]
+    k=1/k_inv
+    kv=0
+    vaccdelay_inv=0
+    vaccdelay=0
+    d=x[4]
+    n_inv=x[5]
+    n=1/n_inv
+    nv=0
+    f=x[6]
+    p=x[7]
+    pv=0
+    u=x[8]
+    uv=0
+    uA=x[9]
+    g=x[10]
+    gv=0
+    l_inv=x[11]
+    l=1/l_inv
+    lv=0
+    v=v_value
+    b=x[12]
+    b1=b
+    db2=0
+    b2=db2*b1
+    db3=x[13]
+    b3=db3*b1
+    db4=0
+    b4=db4*b2
+    db5=x[14] 
+    b5=db5*b1
+    db6=0
+    b6=db6*b2
+    ro=(SDpar$stringency_index)/100
+    
+    parameters=list(S=data$S[t],E=data$E[t],P=data$P[t], I=data$I[t],
+                    J=data$J[t], A=data$A[t], 
+                  Tv=data$Tv[t], V=data$V[t], Ev=data$Ev[t], Pv=data$Pv[t], 
+                  Iv=data$Iv[t], Jv=data$Jv[t], Av=data$Av[t], 
+                  R=data$R[t], D=data$D[t], 
+                       a1=a1, a2=a2, k=k,kv=kv,
+                       d=d, n=n,  f=f, p=p, pv=pv,
+                       vaccdelay=vaccdelay, u=u, uv=uv,
+                       uA=uA, g=g, gv=gv, 
+                       l=l, lv=lv, v=v_value,
+                       ro=ro[t], b1=b, b2=b2, b3=b3, b4=b4,
+                       b5=b5, b6=b6)
+    
+    f=with(parameters, matrix(c(eval(fEE),eval(fEP),eval(fEI),eval(fEJ),eval(fEA),
+                                eval(fPE),eval(fPP),eval(fPI),eval(fPJ),eval(fPA),
+                                eval(fIE),eval(fIP),eval(fII),eval(fIJ),eval(fIA),
+                                eval(fJE),eval(fJP),eval(fJI),eval(fJJ),eval(fJA),
+                                eval(fAE), eval(fAP),eval(fAI),eval(fAJ),eval(fAA)),
+                              nrow=5, byrow=TRUE))
+    
+    vv=with(parameters, matrix(c(eval(vEE),eval(vEP),eval(vEI),eval(vEJ),eval(vEA),
+                                 eval(vPE),eval(vPP),eval(vPI),eval(vPJ),eval(vPA),
+                                 eval(vIE),eval(vIP),eval(vII),eval(vIJ),eval(vIA),
+                                 eval(vJE),eval(vJP),eval(vJI),eval(vJJ),eval(vJA),
+                                 eval(vAE),eval(vAP),eval(vAI),eval(vAJ),eval(vAA)),
+                               nrow=5, byrow=TRUE))
+    
+    
+    Rt[t]=(max(eigen(f %*% solve(vv))$values))
+  }
+  
+  R0=NA
+  Rt=as.data.frame(Rt)
+  Rt$t=seq(1:151)
+  return(list(R0,Rt))
+}
+
+estimated_data_noVacc=function(par, v_value){
+  ' for v=0'
+    y0=c(S=865055,E=7973,
+         P=4000, I=280,J=2520, A=1200, Tv=0, V=0, Ev=0,
+         Pv=0, Iv=0, Jv=0, Av=0, R=6845, D=127)/888000
+    
+    out=ode(y=y0,times=seq(0,150, by=1),func = SEPIJAR_opt, 
+            parms = c(par,v_value), method='ode45')
+    out=as.data.frame(out)
+    
+    u=par[8]
+    uv=0
+    uA=par[9]
+    g=par[10]
+    gv=0
+    
+    inc=numeric(151)
+    for (i in 1:151){
+      inc[i+1]=u*g*out$I[i]+uA*g*out$A[i]+uv*g*out$Iv[i]
+    }
+    return(list(New_data=out, Incidence=inc))
+}
+```
+
+
+## DE with vaccination rate 0.013 Functions
+
+```{r}
+SEPIJARV_opt=function(t,y,parms){ 
+    'function including the ODEs of the compartmental model - 
+      same ODEs as the ones used for the simulation.'
+    a1_inv=parms[1]
+    a1=1/a1_inv
+    a2_inv=parms[2]
+    a2=1/a2_inv
+    k_inv=parms[3]
+    k=1/k_inv
+    kv=k
+    vaccdelay_inv=parms[4]
+    vaccdelay=1/vaccdelay_inv
+    d=parms[5]
+    n_inv=parms[6]
+    n=1/n_inv
+    nv=n
+    f=parms[7]
+    p=parms[8]
+    pv=parms[9]
+    u=parms[10]
+    uv=u
+    uA=parms[11]
+    g=parms[12]
+    gv=g
+    l_inv=parms[13]
+    l=1/l_inv
+    lv=l
+    v=v_value
+    b=parms[14]
+    b1=b
+    db2=parms[15]
+    b2=db2*b1
+    db3=parms[16]
+    b3=db3*b1
+    db4=parms[17]
+    b4=db4*b2
+    db5=parms[18] 
+    b5=db5*b1
+    db6=parms[19]
+    b6=db6*b2
+    ro=(SDpar$stringency_index)/100
+    with(as.list(y),{
+      
+      dS=-(1-ro[t+1])*b*S*(I+d*A)-(1-ro[t+1])*b2*S*(Iv+d*Av)-
+        S*(b5*J+b6*Jv+b3*P+b4*Pv+v)
+      dE=(1-ro[t+1])*b*S*(I+d*A)+(1-ro[t+1])*b2*S*(Iv+d*Av)+
+        S*(b5*J+b6*Jv+b3*P+b4*Pv)+
+        (1-ro[t+1])*b*Tv*(I+d*A)+(1-ro[t+1])*b2*Tv*(Iv+d*Av)+
+        Tv*(b5*J+b6*Jv+b3*P+b4*Pv)-l*E
+      dP=l*E-k*P
+      dI=p*k*P-(1-u)*a1*I-u*g*I
+      dJ=u*g*I-a2*J+uA*g*A
+      dA=(1-p)*k*P-(1-uA)*n*A-uA*g*A
+      
+      dT=S*v-(1-ro[t+1])*b*Tv*(I+d*A)-
+        (1-ro[t+1])*b2*Tv*(Iv+d*Av)- Tv*(b5*J+b6*Jv+b3*P+b4*Pv)-vaccdelay*Tv
+      dV=vaccdelay*Tv-(1-ro[t+1])*b*V*(I+d*A)-(1-ro[t+1])*b2*V*(Iv+d*Av)-
+        V*(b5*J+b6*Jv+b3*P+b4*Pv)
+      dEv=(1-ro[t+1])*b*V*(I+d*A)+(1-ro[t+1])*b2*V*(Iv+d*Av)+
+        V*(b5*J+b6*Jv+b3*P+b4*Pv)-lv*Ev
+      dPv=lv*Ev-kv*Pv
+      dIv=pv*kv*Pv-(1-uv)*a1*Iv-uv*gv*Iv
+      dJv=uv*gv*Iv-a2*Jv
+      dAv=(1-pv)*kv*Pv-n*Av
+      dR=(1-uA)*n*A+(1-u)*a1*I+f*a2*J + n*Av+(1-uv)*a1*Iv+a2*Jv
+      dD=(1-f)*a2*J
+      
+      Dout=c(dS,dE,dP,dI,dJ,dA,dT,dV,dEv,dPv,dIv,dJv,dAv,dR,dD)
+      #print(sum(Dout))
+      return(list(Dout))
+    })
+}
+
+
+#--- Optimisation function used for DE optimisation---#
+Optimisation=function(v_value, niter, Data){
+  ode_MSE=function(x, y0=y0){
+    'The objective function of the DE optimisation - 
+      The RMSE error between the simulated data and the data produced 
+        using the parameter vectors given in each generation of DE.'
+    a1_inv=x[1]
+    a1=1/a1_inv
+    a2_inv=x[2]
+    a2=1/a2_inv
+    k_inv=x[3]
+    k=1/k_inv
+    vaccdelay_inv=x[4]
+    vaccdelay=1/vaccdelay_inv
+    d=x[5]
+    n_inv=x[6]
+    n=1/n_inv
+    f=x[7]
+    p=x[8]
+    pv=x[9]
+    u=x[10]
+    uv=u
+    uA=x[11]
+    g=x[12]
+    l_inv=x[13]
+    l=1/l_inv
+    b=x[14]
+    b1=b
+    db2=x[15]
+    b2=db2*b1
+    db3=x[16]
+    b3=db3*b1
+    db4=x[17]
+    b4=db4*b2
+    db5=x[18] 
+    b5=db5*b1
+    db6=x[19]
+    b6=db6*b2
+    v=v_value
+    
+    #The simulated data
+    Simu=Data$x #the noisy simulated data
+      
+    #Initial Values/ Sizes of each compartment starting on 01/01/2021
+    E=7973/888000 
+    I=280/888000
+    R=6845/888000
+    Tv=0
+    A=1200/888000
+    V=0
+    Ev=0
+    Iv=0
+    Av=0
+    Jv=0
+    J=2520/888000
+    P=4000/888000
+    Pv=0
+    D=127/888000
+    N=888000/888000
+    y0=c(S=N-E-P-I-J-A-Tv-V-Ev-Pv-Iv-Jv-Av-R-D,E=E,
+         P=P, I=I,J=J, A=A, Tv=Tv, V=V, Ev=Ev,
+         Pv=Pv, Iv=Iv, Jv=Jv, Av=Av, R=R, D=D)
+    
+    out=ode(y=y0,times=seq(0,150, by=1),func = SEPIJARV_opt, parms=x, 
+            method='ode45') #function to solve the ODEs given in SEPIJARV_opt
+    out=as.data.frame(out)
+    #generating the incidence data from data given by 'out'
+    rep=numeric(151)
+    for (i in 1:151){
+      rep[i+1]=u*g*out$I[i]+uA*g*out$A[i]+uv*g*out$Iv[i]
+    }
+    error=rmse(Simu, rep) #RMSE between the original simulated incidence data 
+    return(error)          #and the incidence data generated using the parameter 
+  }                         #vector from the current generation
+  
+  #lower limit of each parameter
+  lower=c(3,5,1,7,0.3,3,0.8,0,0,0,0,0,1,0.2,0,0,0,0,0)
+  #upper limit of each parameter
+  upper=c(7,15,7,15,1,9,1,1,1,1,1,1,3,5,1,1,1,1,1)
+  
+  #Running DEoptim command to find optimal parameters 
+   #using strategy 2: DE/local-to-best/1/bin
+  opt=DEoptim(ode_MSE ,lower,upper, 
+              control = list(strategy =2 ,itermax=niter,NP=200)) 
+  
+  
+  optimal_parms=opt[['optim']][["bestmem"]]
+  names(optimal_parms)=c('a1_inv','a2_inv','k_inv','vaccdelay_inv',
+                         'd','n_inv','f','p','pv','u','uA','g','l_inv',
+                         'b','b2','b3','b4','b5','b6')
+  new_dat=as.data.frame(ode(y=y0,times=seq(0,150, by=1),
+                            func = SEPIJARV_opt, 
+                            parms=optimal_parms, 
+                            method='ode45')) #calculate the data using the 
+                                              #parameters given by DE
+
+  return(list(opt,new_dat,optimal_parms))
+}
+
+DE_calc_Rt=function(v_value,data, x){
+'Calculates R0 and Rt for the data given by DE using the Next Generation Matrix'
+  Rt=numeric(151)
+  for (t in 1:151){
+    a1_inv=x[1]
+    a1=1/a1_inv
+    a2_inv=x[2]
+    a2=1/a2_inv
+    k_inv=x[3]
+    k=1/k_inv
+    kv=k
+    vaccdelay_inv=x[4]
+    vaccdelay=1/vaccdelay_inv
+    d=x[5]
+    n_inv=x[6]
+    n=1/n_inv
+    f=x[7]
+    p=x[8]
+    pv=x[9]
+    u=x[10]
+    uv=u
+    uA=x[11]
+    g=x[12]
+    gv=g
+    l_inv=x[13]
+    l=1/l_inv
+    lv=l
+    b=x[14]
+    b1=b
+    db2=x[15]
+    b2=db2*b1
+    db3=x[16]
+    b3=db3*b1
+    db4=x[17]
+    b4=db4*b2
+    db5=x[18] 
+    b5=db5*b1
+    db6=x[19]
+    b6=db6*b2
+    v=v_value
+    ro=(SDpar$stringency_index)/100
+    
+    parameters=list(S=data$S[t],E=data$E[t],P=data$P[t], I=data$I[t],
+                    J=data$J[t], A=data$A[t], 
+                  Tv=data$Tv[t], V=data$V[t], Ev=data$Ev[t], Pv=data$Pv[t], 
+                  Iv=data$Iv[t], Jv=data$Jv[t], Av=data$Av[t], 
+                  R=data$R[t], D=data$D[t], 
+                       a1=a1, a2=a2, k=k,kv=kv,
+                       d=d, n=n,  f=f, p=p, pv=pv,
+                       vaccdelay=vaccdelay, u=u, uv=uv,
+                       uA=uA, g=g, gv=gv, 
+                       l=l, lv=lv, v=v_value,
+                       ro=ro[t], b1=b, b2=b2, b3=b3, b4=b4,
+                       b5=b5, b6=b6)
+    
+    f=with(parameters, matrix(c(eval(fEE),eval(fEP),eval(fEI),eval(fEJ),eval(fEA), 
+                                eval(fEEv),eval(fEPv),eval(fEIv),eval(fEJv),eval(fEAv), 
+                                eval(fPE),eval(fPP),eval(fPI),eval(fPJ),eval(fPA),
+                                eval(fPEv),eval(fPPv),eval(fPIv),eval(fPJv),eval(fPAv),
+                                eval(fIE),eval(fIP),eval(fII),eval(fIJ),eval(fIA),
+                                eval(fIEv),eval(fIPv),eval(fIIv),eval(fIJv),eval(fIAv),
+                                eval(fJE),eval(fJP),eval(fJI),eval(fJJ),eval(fJA),
+                                eval(fJEv),eval(fJPv),eval(fJIv),eval(fJJv),eval(fJAv),
+                                eval(fAE), eval(fAP),eval(fAI),eval(fAJ),eval(fAA),
+                                eval(fAEv), eval(fAPv),eval(fAIv),eval(fAJv),eval(fAAv),
+                                eval(fEvE),eval(fEvP),eval(fEvI),eval(fEvJ),eval(fEvA), 
+                                eval(fEvEv),eval(fEvPv),eval(fEvIv),eval(fEvJv),eval(fEvAv), 
+                                eval(fPvE),eval(fPvP),eval(fPvI), eval(fPvJ),eval(fPvA),
+                                eval(fPvEv),eval(fPvPv),eval(fPvIv),eval(fPvJv),eval(fPvAv),
+                                eval(fIvE),eval(fIvP),eval(fIvI),eval(fIvJ),eval(fIvA),
+                                eval(fIvEv),eval(fIvPv),eval(fIvIv),eval(fIvJv),eval(fIvAv),
+                                eval(fJvE), eval(fJvP),eval(fJvI),eval(fJvJ),eval(fJvA),
+                                eval(fJvEv),eval(fJvPv),eval(fJvIv),eval(fJvJv),eval(fJvAv),
+                                eval(fAvE), eval(fAvP),eval(fAvI),eval(fAvJ), eval(fAvA),
+                                eval(fAvEv), eval(fAvPv),eval(fAvIv),eval(fAvJv),eval(fAvAv)),
+                              nrow=10, byrow=TRUE))
+    
+    vv=with(parameters, matrix(c(eval(vEE),eval(vEP),eval(vEI),eval(vEJ),eval(vEA),
+                                 eval(vEEv),eval(vEPv),eval(vEIv),eval(vEJv),eval(vEAv),
+                                 eval(vPE),eval(vPP),eval(vPI),eval(vPJ),eval(vPA),
+                                 eval(vPEv),eval(vPPv),eval(vPIv),eval(vPJv),eval(vPAv),
+                                 eval(vIE),eval(vIP),eval(vII),eval(vIJ),eval(vIA),
+                                 eval(vIEv),eval(vIPv),eval(vIIv),eval(vIJv),eval(vIAv),
+                                 eval(vJE),eval(vJP),eval(vJI),eval(vJJ),eval(vJA),
+                                 eval(vJEv),eval(vJPv),eval(vJIv),eval(vJJv),eval(vJAv),
+                                 eval(vAE), eval(vAP),eval(vAI),eval(vAJ),eval(vAA),
+                                 eval(vAEv), eval(vAPv),eval(vAIv),eval(vAJv),eval(vAAv),
+                                 eval(vEvE),eval(vEvP),eval(vEvI),eval(vEvJ),eval(vEvA),
+                                 eval(vEvEv),eval(vEvPv),eval(vEvIv),eval(vEvJv),eval(vEvAv),
+                                 eval(vPvE),eval(vPvP),eval(vPvI), eval(vPvJ),eval(vPvA),
+                                 eval(vPvEv),eval(vPvPv),eval(vPvIv),eval(vPvJv),eval(vPvAv),
+                                 eval(vIvE),eval(vIvP),eval(vIvI),eval(vIvJ),eval(vIvA),
+                                 eval(vIvEv),eval(vIvPv),eval(vIvIv),eval(vIvJv),eval(vIvAv),
+                                 eval(vJvE),eval(vJvP),eval(vJvI),eval(vJvJ),eval(vJvA),
+                                 eval(vJvEv),eval(vJvPv),eval(vJvIv),eval(vJvJv),eval(vJvAv),
+                                 eval(vAvE), eval(vAvP),eval(vAvI),eval(vAvJ),eval(vAvA),
+                                 eval(vAvEv),eval(vAvPv),eval(vAvIv),eval(vAvJv),eval(vAvAv)),
+                               nrow=10, byrow=TRUE))
+    
+    
+    Rt[t]=(max(eigen(f %*% solve(vv))$values))
+  }
+  R0=NA
+  Rt=as.data.frame(Rt)
+  Rt$t=seq(1:151)
+  return(list(R0,Rt))
+}
+
+
+estimated_data=function(par, v_value){
+  ' for v!=0'
+    y0=c(S=865055,E=7973,
+         P=4000, I=280,J=2520, A=1200, Tv=0, V=0, Ev=0,
+         Pv=0, Iv=0, Jv=0, Av=0, R=6845, D=127)/888000
+    
+    out=ode(y=y0,times=seq(0,150, by=1),func = SEPIJARV_opt, 
+            parms = c(par,v_value), method='ode45')
+    out=as.data.frame(out)
+    
+    u=par[8]
+    uv=u
+    uA=par[9]
+    g=par[10]
+    gv=g
+    
+    inc=numeric(151)
+    for (i in 1:151){
+      inc[i+1]=u*g*out$I[i]+uA*g*out$A[i]+uv*g*out$Iv[i]
+    }
+    return(list(New_data=out, Incidence=inc))
+}
+```
+
+# Simulate data with constant $\beta$ 's, no vaccinations and zero stringency index
+
+```{r results='hide', fig.cap='Simulated data from SEPIJAR model'}
+E=7973/888000 #01/01/2021
+I=280/888000
+R=6845/888000
+Tv=0
+A=1200/888000
+V=0
+Ev=0
+Iv=0
+Av=0
+Jv=0
+J=2520/888000
+P=4000/888000
+Pv=0
+D=127/888000
+N=888000/888000
+y=c(S=N-E-P-I-J-A-Tv-V-Ev-Pv-Iv-Jv-Av-R-D, 
+    E=E, P=P, I=I,J=J, A=A, Tv=Tv, V=V, Ev=Ev, 
+    Pv=Pv, Iv=Iv, Jv=Jv, Av=Av, R=R, D=D)
+
+SDpar=read.csv('covid-stringency-index.csv')
+SDpar=SDpar %>% filter(Entity=='Cyprus', Day>='2021-01-01', Day<=	'2021-05-31')
+SDpar$stringency_index=numeric(151) #no stringency index
+ro=SDpar$stringency_index
+
+# --- Simulate data for v=0, rho=0, b1=0.3---#
+parms=c(a1=1/5, a2=1/14, k=1/2,kv=1/2, 
+        d=0.60, n=1/6,  f=0.998, p=0.70, pv=0.15,
+        vaccdelay=1/14, u=0.9, uv=0.9,  uA=0.75,
+        g=1/3,gv=1/3, b1=0.3,
+        l=1/3.8, lv=1/3.8, v=0,
+        ro=0 )
+
+outSimple_no_rho=as.data.frame(ode(y=y, parms=parms, 
+                                   times=seq(0,150),func = SEPIJARV,
+                                   method='ode45'))
+#print(matplot.0D(outSimple_no_rho,legend=list(x='topright',cex=0.6)))
+ggarrange(plot_simu_v_val(v_val=0,data=outSimple_no_rho)[[1]],
+          plot_simu_v_val(v_val=0,data=outSimple_no_rho)[[2]])
+```
+
+
+## Noisy incidence data 
+
+```{r results='hide'}
+data=outSimple_no_rho
+parms=c(0.9,0.9,1/3,0.75)
+u=parms[1]
+uv=0
+g=parms[3]
+uA=parms[4]
+lambda=numeric(151)
+
+for (i in 1:151){
+lambda[i+1]=(u*g*data$I[i]+uA*g*data$A[i]+
+uv*g*data$Iv[i])*888000 #calculate the number of reported cases each day
+}
+noise=(rpois(length(lambda),lambda)) #simulate random poisson data with lambda equal
+#to the number of reported cases each day
+incidenceSimple_no_rho=noise/888000 
+incidenceSimple_no_rho=as.data.frame((incidenceSimple_no_rho))
+names(incidenceSimple_no_rho)=c('x')
+#plot(incidenceSimple_no_rho$x)
+```
+
+## Estimating Rt using the NGM
+
+```{r results='hide'}
+Rt_Simple_no_rho=calc_Rt_noVacc(v_value=0, data=outSimple_no_rho, ro=numeric(151))[[2]]
+#plot(Rt_Simple_no_rho$t, Rt_Simple_no_rho$Rt)
+```
+## EpiEstim
+
+```{r, warning=FALSE, message=FALSE, fig.cap='The daily and weekly estimates of $R_t$ using the EpiEstim and the data obtained by the SEPIJAR model with zero stingency index'}
+RtU_Epi_D_no_rho=Rt_Unc_daily(incidenceSimple_no_rho)
+RtU_Epi_W_no_rho=Rt_Unc_weekly(incidenceSimple_no_rho)
+B_no_rho=plot_R(RtU_Epi_W_no_rho,v=0,'Weekly',noise='Poisson', data=Rt_Simple_no_rho)
+C_no_rho=plot_R(RtU_Epi_D_no_rho,v=0,'Daily',noise='Poisson', data=Rt_Simple_no_rho)
+ggarrange(C_no_rho[[3]], B_no_rho[[3]], labels=c('A','B'), 
+          nrow=2, common.legend = FALSE , legend = 'bottom')
+ggsave(file='Simpler_EpiEstim_Res_no_rho.pdf', width = 7.30,height=7.5, units=c('in'))
+```
+## DE
+
+```{r eval=FALSE}
+#OSimple_no_rho=OptimisationSimple_noVacc(niter=200, Data=incidenceSimple_no_rho)
+#write.csv(OSimple_no_rho[[1]][[1]],'OptSimple_no_rho_par2.csv')
+#write.csv(OSimple_no_rho[[3]],'OptSimple_no_rho_parameters.csv')
+```
+
+```{r}
+v_value=0
+read.csv('OptSimple_no_rho_par2.csv') #optimal parameters returned
+parameters_no_rho=read.csv('OptSimple_no_rho_parameters.csv')
+Generated_data_no_rho=estimated_data_noVacc(par=parameters_no_rho$x, 
+                                            v_value = 0)
+Rt_DE_Simpler_no_rho=Simpler_DE_calc_Rt_noVacc(v_value=0,
+                                               data=Generated_data_no_rho[[1]], 
+                                               x=parameters_no_rho$x)
+```
+```{r eval=FALSE, results='hide', include=FALSE}
+plot(Rt_DE_Simpler_no_rho[[2]]$t, Rt_DE_Simpler_no_rho[[2]]$Rt, type='l')
+lines(Rt_Simple_no_rho$Rt, col='red')
+```
+
+```{r fig.cap='Resulting incidence data and $R_t$ estimates using SEPIJAR model and DE'}
+# --- Plotting the Results from DE ---#
+SimplerIncidence_DE_Results_no_rho=cbind(1:152,incidenceSimple_no_rho,
+                                         Generated_data_no_rho[[2]])
+names(SimplerIncidence_DE_Results_no_rho)=c('Days','Simulated','Generated')
+SimplerRt_DE_Results_no_rho=cbind(Rt_Simple_no_rho, Rt_DE_Simpler_no_rho[[2]]$Rt)
+names(SimplerRt_DE_Results_no_rho)=c('True','Days','Estimated')
+
+gg=ggplot(SimplerIncidence_DE_Results_no_rho,aes(x=Days))+
+    geom_line(aes(y=Simulated*888000, 
+                  col='Simulated (True)'))+
+    geom_line(aes(y=Generated*888000, 
+                  col='Generated'))+
+    labs(color='Incidence Data')+
+    ylab('Daily number of new cases')+
+    ggtitle(expression('Incidence data / SEPIJAR model /'~rho ~'=0'))+
+    theme(legend.key.size = unit(5, 'mm'), 
+          plot.title = element_text(size = unit(9,'cm')),
+          axis.text = element_text(size = unit(7,'cm')),
+          axis.title = element_text(size = unit(9,'cm')),
+          legend.text = element_text(size = unit(7, 'mm')),
+          legend.title =element_text(size = unit(7, 'mm')),
+          legend.position = 'bottom')
+
+GRt=ggplot(SimplerRt_DE_Results_no_rho,aes(x=Days))+
+  geom_line(aes(y=True, col='True Values'))+
+    geom_line(aes(y=Estimated, col='Estimated'))+
+    labs(color='Time-Varying R')+
+    xlab('Days')+
+    ylab('Time-Varying R')+
+    ggtitle(expression('Time-Varying R/ SEPIJAR model /'~rho~'=0'))+
+    theme(legend.key.size = unit(5, 'mm'), 
+          plot.title = element_text(size = unit(9,'cm')),
+          axis.text = element_text(size = unit(7,'cm')),
+          axis.title = element_text(size = unit(9,'cm')),
+          legend.text = element_text(size = unit(7, 'mm')),
+          legend.title =element_text(size = unit(7, 'mm')),
+          legend.position = 'bottom')
+
+ggarrange(gg,GRt, labels = c('A','B'),common.legend = FALSE, legend = 'bottom')
+ggsave(file='Simpler_DE_Res_no_rho.pdf', width = 7.30,height=3.5, units=c('in'))
+
+mean(abs(SimplerRt_DE_Results_no_rho$True-SimplerRt_DE_Results_no_rho$Estimated))
+rmse(SimplerRt_DE_Results_no_rho$True,SimplerRt_DE_Results_no_rho$Estimated)
+```
+
+# Simulate data with constant $\beta$'s, no vaccinations but varying stringency index 
+
+```{r fig.cap='Simulated data from SEPIJAR (b) model'}
+SDpar=read.csv('covid-stringency-index.csv')
+SDpar=SDpar %>% filter(Entity=='Cyprus', Day>='2021-01-01', Day<=	'2021-05-31')
+ro=(SDpar$stringency_index)/100
+
+# --- Simulate data for v=0 / b1=0.3 / rho=varying ---#
+parms=c(a1=1/5, a2=1/14, k=1/2,kv=1/2, 
+        d=0.60, n=1/6,  f=0.998, p=0.70, pv=0.15,
+        vaccdelay=1/14, u=0.9, uv=0.9,  uA=0.75,
+        g=1/3,gv=1/3, b1=0.3,
+        l=1/3.8, lv=1/3.8, v=0,
+        ro=ro )
+
+outSimple=as.data.frame(ode(y=y, parms=parms, times=seq(0,150),
+                            func = SEPIJARV, method='ode45'))
+#print(matplot.0D(outSimple,legend=list(x='topright',cex=0.6)))
+#plot_simu_v_val(v_val=0,data=outSimple)
+ggarrange(plot_simu_v_val(v_val=0,data=outSimple)[[1]],
+          plot_simu_v_val(v_val=0,data=outSimple)[[2]])
+```
+
+## Noisy incidence data 
+```{r}
+data=outSimple
+parms=c(0.9,0.9,1/3,0.75)
+u=parms[1]
+uv=parms[2]
+g=parms[3]
+uA=parms[4]
+lambda=numeric(151)
+
+for (i in 1:151){
+lambda[i+1]=(u*g*data$I[i]+uA*g*data$A[i]+
+uv*g*data$Iv[i])*888000 #calculate the number of reported cases each day
+}
+noise=(rpois(length(lambda),lambda)) #simulate random poisson data with lambda equal
+#to the number of reported cases each day
+incidenceSimple=noise/888000 
+incidenceSimple=as.data.frame((incidenceSimple))
+names(incidenceSimple)=c('x')
+#plot(incidenceSimple$x)
+```
+
+## Estimating Rt using the NGM
+
+```{r results='hide'}
+Rt_Simple=calc_Rt_noVacc(v_value=0, data=outSimple, ro=ro)[[2]]
+#plot(x=Rt_Simple$t, y=Rt_Simple$Rt, type='l')
+#plot(ro, type='l')
+```
+
+
+## EpiEstim
+
+```{r, warning=FALSE, message=FALSE, fig.cap='The daily and weekly estimates of $R_t$ using the EpiEstim and the data obtained by the SEPIJAR model with varying stingency index'}
+RtU_Epi_D=Rt_Unc_daily(incidenceSimple)
+RtU_Epi_W=Rt_Unc_weekly(incidenceSimple)
+B=plot_R(RtU_Epi_W,v=0,'Weekly',noise='Poisson', data=Rt_Simple)
+C=plot_R(RtU_Epi_D,v=0,'Daily',noise='Poisson', data=Rt_Simple)
+ggarrange(C[[3]],B[[3]], labels=c('A','B'), nrow=2, common.legend = FALSE ,
+          legend = 'bottom')
+ggsave(file='Simpler_EpiEstim_Res_no_rho.pdf', width = 7.30,height=7.5, units=c('in'))
+```
+
+## DE
+
+```{r eval=FALSE}
+#OSimple=OptimisationSimple(niter=200)
+#write.csv(OSimple[[1]][[1]],'OptSimple_par2.csv')
+#write.csv(OSimple[[3]],'OptSimple_parameters.csv')
+```
+
+```{r}
+v_value=0
+read.csv('OptSimple_par2.csv') #optimal parameters returned
+parameters=read.csv('OptSimple_parameters.csv')
+Generated_data=estimated_data_noVacc(par=parameters$x, v_value = 0)
+Rt_DE_Simpler=Simpler_DE_calc_Rt_noVacc(v_value=0, data=Generated_data[[1]], x=parameters$x)
+```
+```{r eval=FALSE, include=FALSE}
+plot(Rt_DE_Simpler[[2]]$t, Rt_DE_Simpler[[2]]$Rt, type='l')
+lines(Rt_Simple$Rt, col='red')
+```
+
+```{r fig.cap='Resulting incidence data and Rt estimates using the SEPIJAR (b) model and DE'}
+# --- Plotting the Results from DE ---#
+SimplerIncidence_DE_Results=cbind(1:152,incidenceSimple, Generated_data[[2]])
+names(SimplerIncidence_DE_Results)=c('Days','Simulated','Generated')
+SimplerRt_DE_Results=cbind(Rt_Simple, Rt_DE_Simpler[[2]]$Rt)
+names(SimplerRt_DE_Results)=c('True','Days','Estimated')
+
+gg=ggplot(SimplerIncidence_DE_Results,aes(x=Days))+
+    geom_line(aes(y=Simulated*888000, 
+                  col='Simulated (True)'))+
+    geom_line(aes(y=Generated*888000, 
+                  col='Generated'))+
+    labs(color='Incidence Data')+
+    ylab('Daily number of new cases')+
+    ggtitle(paste('Incidence data / SEPIJAR model'))+
+    theme(legend.key.size = unit(5, 'mm'), 
+          plot.title = element_text(size = unit(9,'cm')),
+          axis.text = element_text(size = unit(7,'cm')),
+          axis.title = element_text(size = unit(9,'cm')),
+          legend.text = element_text(size = unit(7, 'mm')),
+          legend.title =element_text(size = unit(7, 'mm')),
+          legend.position = 'bottom')
+
+GRt=ggplot(SimplerRt_DE_Results,aes(x=Days))+
+  geom_line(aes(y=True, col='True Values'))+
+    geom_line(aes(y=Estimated, col='Estimated'))+
+    labs(color='Time-Varying R')+
+    xlab('Days')+
+    ylab('Time-Varying R')+
+    ggtitle('Time-Varying R/ SEPIJAR model')+
+    theme(legend.key.size = unit(5, 'mm'), 
+          plot.title = element_text(size = unit(9,'cm')),
+          axis.text = element_text(size = unit(7,'cm')),
+          axis.title = element_text(size = unit(9,'cm')),
+          legend.text = element_text(size = unit(7, 'mm')),
+          legend.title =element_text(size = unit(7, 'mm')),
+          legend.position = 'bottom')
+
+
+ggarrange(gg,GRt, labels = c('A','B'),common.legend = FALSE, legend = 'bottom')
+ggsave(file='Simpler_DE_Res.pdf', width = 7.30,height=3.5, units=c('in'))
+
+mean(abs(SimplerRt_DE_Results$True-SimplerRt_DE_Results$Estimated))
+rmse(SimplerRt_DE_Results$True,SimplerRt_DE_Results$Estimated)
+```
+
+
+# Simulate data with constant $\beta$'s, vaccination rate 0.013 and varying stringency index 
+
+## Noisy incidence data
+
+```{r fig.cap='Simulated incidence data using the SEPIJARV model'}
+# --- Simulating data from the SEPIJARV model with v=0.013, 
+   # constant transmission rates with b1=0.3 and varying rho --- #
+
+parms=c(a1=1/5, a2=1/14, k=1/2,kv=1/2, 
+        d=0.60, n=1/6,  f=0.998, p=0.70, pv=0.15,
+        vaccdelay=1/14, u=0.9, uv=0.9,  uA=0.75,
+        g=1/3,gv=1/3, b1=0.3,
+        l=1/3.8, lv=1/3.8, v=0.013,
+        ro=ro )
+
+outSimple_013=as.data.frame(ode(y=y, parms=parms, times=seq(0,150),
+                                func = SEPIJARV, method='ode45'))
+#print(matplot.0D(outSimple_013,legend=list(x='topright',cex=0.6)))
+
+ggarrange(plot_simu_v_val(v_val=0.013,data=outSimple_013)[[1]],
+          plot_simu_v_val(v_val=0.013,data=outSimple_013)[[2]])
+
+## --- Incidence data --- ##
+data=outSimple_013
+parms=c(0.9,0.9,1/3,0.75)
+u=parms[1]
+uv=parms[2]
+g=parms[3]
+uA=parms[4]
+lambda=numeric(151)
+
+for (i in 1:151){
+lambda[i+1]=(u*g*data$I[i]+uA*g*data$A[i]+
+uv*g*data$Iv[i])*888000 #calculate the number of reported cases each day
+}
+noise=(rpois(length(lambda),lambda)) #simulate random poisson data with lambda equal
+#to the number of reported cases each day
+incidenceSimple_013=noise/888000 
+incidenceSimple_013=as.data.frame((incidenceSimple_013))
+names(incidenceSimple_013)=c('x')
+#plot(incidenceSimple_013$x)
+```
+
+## Estimating Rt using the NGM
+```{r}
+# --- Calculating Rt when v=0.013 / b1 is constant / rho varies---#
+Rt_Simple_013=calc_Rt(v_value=0.013, data=outSimple_013, ro=ro)[[2]]
+#plot(x=Rt_Simple_013$t, y=Rt_Simple_013$Rt, type='l')
+#lines(x=Rt_Simple$t, y=Rt_Simple$Rt, type='l', col='red')
+```
+
+
+## EpiEstim
+
+```{r fig.cap='The daily and weekly estimates of $R_t$ using the EpiEstim and the data obtained by the SEPIJARV model with varying stingency index'}
+RtU_Epi_D_013=Rt_Unc_daily(incidenceSimple_013)
+RtU_Epi_W_013=Rt_Unc_weekly(incidenceSimple_013)
+B=plot_R(RtU_Epi_W_013,v=0.013,'Weekly',noise='Poisson', data=Rt_Simple_013)
+C=plot_R(RtU_Epi_D_013,v=0.013,'Daily',noise='Poisson', data=Rt_Simple_013)
+
+ggarrange(C[[3]],B[[3]], labels=c('A','B'), nrow=2, common.legend = FALSE ,
+          legend = 'bottom')
+ggsave(file='Simpler_EpiEstim_Res_013.pdf', width = 7.30,height=7.5, units=c('in'))
+
+```
+
+## DE
+
+```{r eval=FALSE}
+#OSimple_0.013=Optimisation(v_value = 0.013, niter=200, Data =incidenceSimple_013)
+#write.csv(OSimple_0.013[[1]][[1]],'OptSimple013_par2.csv')
+#write.csv(OSimple_0.013[[3]],'OptSimple013_parameters.csv')
+```
+
+```{r}
+v_value=0.013
+read.csv('OptSimple013_par2.csv') #optimal parameters returned
+parameters013=read.csv('OptSimple013_parameters.csv')
+Generated_data_013=estimated_data(par=parameters013$x, v_value = 0.013)
+Rt_DE_Simpler_013=DE_calc_Rt(v_value=0.013,
+                             data=Generated_data_013[[1]],
+                             x=parameters013$x)
+```
+```{r results='hide', include=FALSE}
+plot(Rt_DE_Simpler_013[[2]]$t, Rt_DE_Simpler_013[[2]]$Rt, type='l')
+lines(Rt_Simple_013$Rt, col='red')
+```
+
+```{r fig.cap='Resulting incidence data and Rt estimates using the SEPIJARV model and DE'}
+# --- Plotting the Results from DE ---#
+SimplerIncidence_DE_Results_013=cbind(1:152,incidenceSimple_013, Generated_data_013[[2]])
+names(SimplerIncidence_DE_Results_013)=c('Days','Simulated','Generated')
+
+SimplerRt_DE_Results_013=cbind(Rt_Simple_013, Rt_DE_Simpler_013[[2]]$Rt)
+names(SimplerRt_DE_Results_013)=c('True','Days','Estimated')
+
+gg013=ggplot(SimplerIncidence_DE_Results_013,aes(x=Days))+
+    geom_line(aes(y=Simulated*888000, 
+                  col='Simulated (True)'))+
+    geom_line(aes(y=Generated*888000, 
+                  col='Generated'))+
+    labs(color='Incidence Data')+
+    ylab('Daily number of new cases')+
+    ggtitle(paste('Incidence data / SEPIJARV model'))+
+    theme(legend.key.size = unit(3, 'mm'), 
+          plot.title = element_text(size = unit(9,'cm')),
+          axis.text = element_text(size = unit(7,'cm')),
+          axis.title = element_text(size = unit(9,'cm')),
+          legend.text = element_text(size = unit(7, 'mm')),
+          legend.title =element_text(size = unit(7, 'mm')),
+          legend.position = 'bottom')
+
+SimplerRt_DE_Results_013$rho=SDpar$stringency_index/100
+
+GRt013=ggplot(SimplerRt_DE_Results_013,aes(x=Days))+
+  geom_line(aes(y=True, col='True'))+
+    geom_line(aes(y=Estimated, col='Estimated'))+
+    labs(color='Time-Varying R')+
+    xlab('Days')+
+    ylab('Time-Varying R')+
+    geom_line(aes(y=rho, col='Strigency Index'))+
+    ggtitle('Time-Varying R/ SEPIJARV model')+
+    theme(legend.key.size = unit(2.5, 'mm'), 
+          plot.title = element_text(size = unit(9,'cm')),
+          axis.text = element_text(size = unit(7,'cm')),
+          axis.title = element_text(size = unit(9,'cm')),
+          legend.text = element_text(size = unit(6, 'mm')),
+          legend.title =element_text(size = unit(6, 'mm')),
+          legend.position = 'bottom')
+
+ggarrange(gg013,GRt013, labels = c('A','B'),common.legend = FALSE, legend = 'bottom')
+ggsave(file='Simpler_DE_Res_013.pdf', width = 7.30,height=3.5, units=c('in'))
+
+mean(abs(SimplerRt_DE_Results_013$True-SimplerRt_DE_Results_013$Estimated))
+rmse(SimplerRt_DE_Results_013$True,SimplerRt_DE_Results_013$Estimated)
+```
+

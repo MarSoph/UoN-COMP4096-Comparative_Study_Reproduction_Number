@@ -1,7 +1,20 @@
+---
+subtitle: "Data Simulation"
+title: 'Supplementary Material A1'
+author: "Marina Sofokleous"
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, eval=FALSE)
+```
+```{r}
 library(deSolve)
 library(dplyr)
 library(ggplot2)
-
+library(ggpubr)
+```
 ```{r}
 b1=function(t){
   if (t<29){
@@ -71,7 +84,9 @@ P=4000/888000
 Pv=0
 D=127/888000
 N=888000/888000
-y=c(S=N-E-P-I-J-A-Tv-V-Ev-Pv-Iv-Jv-Av-R-D, E=E, P=P, I=I,J=J, A=A, Tv=Tv, V=V, Ev=Ev, Pv=Pv, Iv=Iv, Jv=Jv, Av=Av, R=R, D=D)
+y=c(S=N-E-P-I-J-A-Tv-V-Ev-Pv-Iv-Jv-Av-R-D, E=E, P=P,
+    I=I,J=J, A=A, Tv=Tv, V=V, Ev=Ev, Pv=Pv, Iv=Iv,
+    Jv=Jv, Av=Av, R=R, D=D)
 
 SDpar=read.csv('covid-stringency-index.csv')
 SDpar=SDpar %>% filter(Entity=='Cyprus', Day>='2021-01-01', Day<=	'2021-05-31')
@@ -196,12 +211,7 @@ ggsave(file = "SimuIncData013.pdf", width = 5.30,height=3.5, units=c('in'))
 plot_simu_v_val(v_val=0.013, data=out0_013)[[2]]
 ggsave(file = "SimuAllData013.pdf", width = 5.30,height=3.5, units=c('in'))
 
-#ggarrange(V013[[2]], V013[[1]],labels = c('a','b'), common.legend = FALSE)
-#ggsave(file = "SimuData013.pdf", width = 7.30,height=3.5, units=c('in'))
-
 v005=plot_simu_v_val(v_val=0.005, data=out0_005)
-#ggarrange(V005[[2]], V005[[1]],labels = c('a','b'), common.legend = FALSE)
-#ggsave(file = "SimuData005.pdf", width = 7.30,height=3.5, units=c('in'))
 
 plot_simu_v_val(v_val=0.005, data=out0_005)[[1]]
 ggsave(file = "SimuIncData005.pdf", width = 5.30,height=3.5, units=c('in'))
@@ -220,8 +230,6 @@ FP=0
 FI=0
 FJ=0
 FA=0
-#FEv=quote((1-ro[t+1])*b1*V*(I+d*A)+
-            #(1-ro[t+1])*b2*V*(Iv+d*Av)+V*(b5*J+b6*Jv+b3*P+b4*Pv))
 FEv=quote((1-ro)*b1*V*(I+d*A)+
             (1-ro)*b2*V*(Iv+d*Av)+V*(b5*J+b6*Jv+b3*P+b4*Pv))
 FPv=0
@@ -330,14 +338,16 @@ calc_Rt=function(v_value,data){
     }
     return(b)
   }
-  R0=numeric(151)
+  Rt=numeric(151)
   for (t in 1:151){
 
     b1=b(t)
     b2=0.6*b1
-    parameters=list(S=1,E=0,P=0, I=0,J=0, A=0, 
-                  Tv=0, V=0, Ev=0, Pv=0, 
-                  Iv=0, Jv=0, Av=0, R=0, D=0,
+    parameters=list(S=data$S[t],E=data$E[t],P=data$P[t], I=data$I[t],
+                    J=data$J[t], A=data$A[t], 
+                  Tv=data$Tv[t], V=data$V[t], Ev=data$Ev[t], Pv=data$Pv[t], 
+                  Iv=data$Iv[t], Jv=data$Jv[t], Av=data$Av[t], 
+                  R=data$R[t], D=data$D[t],
                   a1=1/5, a2=1/14, k=1/2,kv=1/2,
                   d=0.60, n=1/6,  f=0.998, p=0.70, pv=0.15,
                   vaccdelay=1/14, u=0.9, uv=0.9,  uA=0.75, g=1/3, gv=1/3, 
@@ -390,27 +400,30 @@ calc_Rt=function(v_value,data){
                             nrow=10, byrow=TRUE))
 
     
-    R0[t]=(max(eigen(f %*% solve(vv))$values))
+    Rt[t]=(max(eigen(f %*% solve(vv))$values))
   }
 
-  Rt=(data$S + data$Tv+data$V)*R0
-  Rt=as.data.frame(Rt)
-  Rt$t=seq(1:151)
-  return(list(R0,Rt, vv, f))
+  return(Rt)
 }
 ```
 
 ```{r}
 # --- Calculating Rt from the different simulated data ---#
-Rt_005=calc_Rt(v_value=0.005, data=out0_005)[[2]]
-Rt_013=calc_Rt(v_value=0.013,data=out0_013)[[2]]
-Rt_025=calc_Rt(v_value=0.025, data=out0_025)[[2]] #were not used!
+Rt_005=calc_Rt(v_value=0.005, data=out0_005)
+Rt_013=calc_Rt(v_value=0.013,data=out0_013)
+Rt_025=calc_Rt(v_value=0.025, data=out0_025) #were not used!
 
-Rt=cbind(t=seq(1,151),v0_005=Rt_005$Rt,v0_013=Rt_013$Rt,v0_025=Rt_025$Rt)
+Rt=cbind(t=seq(1,151),v0_005=Rt_005,v0_013=Rt_013,v0_025=Rt_025)
 
-ggplot(as.data.frame(Rt), aes(x=t, y=variables, color=variable)) + labs(color='Vaccination rate')+geom_line(aes(y=v0_013, col='v=0.013'))+
+ggplot(as.data.frame(Rt), aes(x=t, y=variables, color=variable)) +
+  labs(color='Vaccination rate')+
+  geom_line(aes(y=v0_013, col='v=0.013'))+
   geom_line(aes(y=v0_005, col='v=0.005'))+
-  geom_line(aes(y=v0_025, col='v=0.025'))+xlab('Days')+ggtitle('The time-varying R for three different vaccination rates') +geom_vline(xintercept = 29, col=1)+theme(legend.key.size = unit(5, 'mm'), plot.title = element_text(size = unit(11,'cm')),
+  geom_line(aes(y=v0_025, col='v=0.025'))+
+  xlab('Days')+
+  ggtitle('The time-varying R for three different vaccination rates') +
+  geom_vline(xintercept = 29, col=1)+
+  theme(legend.key.size = unit(5, 'mm'), plot.title = element_text(size = unit(11,'cm')),
         axis.text = element_text(size = unit(8,'cm')),
         axis.title = element_text(size = unit(11,'cm')),
         legend.text = element_text(size = unit(9, 'mm')),
@@ -444,18 +457,15 @@ ggplot(as.data.frame(R0), aes(x=t, y=variables, color=variable)) + labs(color='V
 
 
 ```{r}
-Rt=cbind(Rt013=read.csv('Rt_013.csv')[,1:2],
-         Rt005=read.csv('Rt_005.csv')$Rt)
+Rt=cbind(1:151,Rt013=read.csv('Rt_013.csv'),
+         Rt005=read.csv('Rt_005.csv'))
 
 B=ggplot(as.data.frame(Rt), aes(x=Rt013.X, y=variables, color=variable))+
-  geom_line(aes(y=Rt013.Rt, col='v=0.013',linetype='v=0.013'))+
-  geom_line(aes(y=Rt005, col='v=0.005',linetype='v=0.005'))+
-  scale_color_manual(values=c("Blue","Black"))+
-  scale_linetype_manual(values = c(2,1))+
-  labs(linetype='Vaccination rate')+
+  geom_line(aes(y=Rt013.x, col='v=0.013'))+
+  geom_line(aes(y=Rt005.x, col='v=0.005'))+
+  labs(color='Vaccination rate')+
   xlab('Days')+
   ylab('Reproduction number')+
-  guides(color=FALSE)+
   ggtitle('The time-varying reproduction number of the simulated data')+
   geom_vline(xintercept = 29, col=1)+
   theme(legend.key.size = unit(5, 'mm'), 
@@ -475,15 +485,10 @@ simuInc=cbind(S013=read.csv('SimuNoisy0_013.csv'),
               S005=read.csv('SimuNoisy0_005.csv')$x)
 
 A=ggplot(simuInc,aes(x=S013.X))+
-    geom_line(aes(y=S013.x, linetype='v=0.013', 
-                  col='v=0.013'))+
-    geom_line(aes(y=S005, linetype='v=0.005',
-                  col='v=0.005'))+
-    scale_color_manual(values=c("Blue","Black"))+
-    scale_linetype_manual(values = c(2,1))+
-    labs(linetype='Vaccination rate')+
+    geom_line(aes(y=S013.x, col='v=0.013'))+
+    geom_line(aes(y=S005, col='v=0.005'))+
+    labs(color='Vaccination rate')+
     ylab('Proportion on the population')+
-    guides(color=FALSE)+
     xlab('Days')+
     ggtitle(paste('The simulated incidence data'))+
     theme(legend.key.size = unit(7, 'mm'), 
@@ -496,5 +501,6 @@ A=ggplot(simuInc,aes(x=S013.X))+
 
 ggsave(file='IncSimu.pdf', width = 7.50,height=3.3, units=c('in'))
 
-ggarrange(A,B,labels=c('a','b'), common.legend = TRUE, legend = 'bottom')
+ggarrange(A,B,labels=c('a','b'), common.legend = FALSE, legend = 'bottom')
 ggsave(file='SimuIncRt.pdf', width = 7.35,height=3.3, units=c('in'))
+```

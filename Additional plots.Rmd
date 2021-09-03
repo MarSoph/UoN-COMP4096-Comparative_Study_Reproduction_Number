@@ -40,7 +40,7 @@ ggsave(file = "Publishedata.pdf", width = 7.30,height=3.9, units=c('in'))
 ```{r}
 # --- Plotting parameter rho --- #
 SDpar=read.csv('covid-stringency-index.csv')
-SDpar=SDpar %>% filter(Entity=='Cyprus', Day>='2020-03-01', Day<=	'2021-05-31')
+SDpar=SDpar %>% filter(Entity=='Cyprus', Day>='2021-01-01', Day<='2021-05-31')
 ro=(SDpar$stringency_index)/100
 
 ggplot(data.frame(t=seq(1,151),y=ro[1:151]),aes(x=t, y=y))+

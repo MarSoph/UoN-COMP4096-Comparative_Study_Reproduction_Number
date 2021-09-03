@@ -1,3 +1,15 @@
+---
+subtitle: "EpiEstim Results"
+title: 'Supplementary Material A6'
+author: "Marina Sofokleous"
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, eval = FALSE)
+```
+
 ```{r Parameters and data}
 library(EpiEstim)
 library(ggplot2)
@@ -61,11 +73,11 @@ plot_R=function(Rt,v, step, noise){
 ' Plots the rulting Rt values on the same figure as the true
 values and the ones obtained by DE'
   if (v==0.013){
-    original=read.csv('Rt_013.csv')$Rt
+    original=read.csv('Rt_013.csv')$x
     DE=read.csv('DERt013.csv')$Rt
   }
   if (v==0.005){
-    original=read.csv('Rt_005.csv')$Rt
+    original=read.csv('Rt_005.csv')$x
     DE=read.csv('DERt005.csv')$Rt
   }
   if (step=='Weekly'){
@@ -184,10 +196,10 @@ Rt_Unc_daily=function(data){
   Rt=estimate_R(incid=data$x*888000,
                 method = "uncertain_si",
                 config = make_config(list(
-                mean_si = 3.96, std_mean_si = 0.5,
-                min_mean_si = 3.53, max_mean_si = 4.39,
-                std_si = 4.75, std_std_si = 0.5,
-                min_std_si = 4.46, max_std_si = 5.07,
+                mean_si = 4.8, std_mean_si = 1,
+                min_mean_si = 3.8, max_mean_si = 5.8,
+                std_si = 2.3, std_std_si = 0.5,
+                min_std_si = 1.1, max_std_si = 3.5,
                 n1 = 100, n2 = 100,
                 t_start=t_start, 
                 t_end =t_end)))
@@ -197,10 +209,10 @@ Rt_Unc_weekly=function(data){
   Rt=estimate_R(incid=data$x*888000,
                 method = "uncertain_si",
                 config = make_config(list(
-                mean_si = 3.96, std_mean_si = 0.5,
-                min_mean_si = 3.53, max_mean_si = 4.39,
-                std_si = 4.75, std_std_si = 0.5,
-                min_std_si = 4.46, max_std_si = 5.07,
+                mean_si = 4.8, std_mean_si = 1,
+                min_mean_si = 3.8, max_mean_si = 5.8,
+                std_si = 2.3, std_std_si = 0.5,
+                min_std_si = 1.1, max_std_si = 3.5,
                 n1 = 100, n2 = 100)))
 }
 ```

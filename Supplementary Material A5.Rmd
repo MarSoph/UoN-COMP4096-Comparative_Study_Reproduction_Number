@@ -1,0 +1,906 @@
+---
+subtitle: "DE Results"
+title: 'Supplementary Material A5'
+author: "Marina Sofokleous"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,  message = FALSE, warning = FALSE)#,results = 'hide', eval = FALSE)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(ggrepel)
+library(deSolve)
+library(Metrics)
+library(DEoptim)
+library(ggpubr)
+```
+
+
+```{r}
+
+SDpar=read.csv('covid-stringency-index.csv')
+SDpar=SDpar %>% filter(Entity=='Cyprus', Day>='2021-01-01', Day<=	'2021-05-31')
+
+#--- Optimisation function used for DE optimisation---#
+Optimisation=function(v_value, niter){
+  SEPIJARV_opt=function(t,y,parms){ 
+    'function including the ODEs of the SEPIJARV compartmental model - 
+      same ODEs as the ones used for the simulation.'
+    a1_inv=parms[1]
+    a1=1/a1_inv
+    a2_inv=parms[2]
+    a2=1/a2_inv
+    k_inv=parms[3]
+    k=1/k_inv
+    kv=k
+    vaccdelay_inv=parms[4]
+    vaccdelay=1/vaccdelay_inv
+    d=parms[5]
+    n_inv=parms[6]
+    n=1/n_inv
+    nv=n
+    f=parms[7]
+    p=parms[8]
+    pv=parms[9]
+    u=parms[10]
+    uv=u
+    uA=parms[11]
+    g=parms[12]
+    gv=g
+    l_inv=parms[13]
+    l=1/l_inv
+    lv=l
+    v=v_value
+    b=parms[14]
+    b1=b
+    db2=parms[15]
+    b2=db2*b1
+    db3=parms[16]
+    b3=db3*b1
+    db4=parms[17]
+    b4=db4*b2
+    db5=parms[18] 
+    b5=db5*b1
+    db6=parms[19]
+    b6=db6*b2
+    ro=(SDpar$stringency_index)/100
+    with(as.list(y),{
+      
+      dS=-(1-ro[t+1])*b*S*(I+d*A)-(1-ro[t+1])*b2*S*(Iv+d*Av)-
+        S*(b5*J+b6*Jv+b3*P+b4*Pv+v)
+      dE=(1-ro[t+1])*b*S*(I+d*A)+(1-ro[t+1])*b2*S*(Iv+d*Av)+
+        S*(b5*J+b6*Jv+b3*P+b4*Pv)+
+        (1-ro[t+1])*b*Tv*(I+d*A)+(1-ro[t+1])*b2*Tv*(Iv+d*Av)+
+        Tv*(b5*J+b6*Jv+b3*P+b4*Pv)-l*E
+      dP=l*E-k*P
+      dI=p*k*P-(1-u)*a1*I-u*g*I
+      dJ=u*g*I-a2*J+uA*g*A
+      dA=(1-p)*k*P-(1-uA)*n*A-uA*g*A
+      
+      dT=S*v-(1-ro[t+1])*b*Tv*(I+d*A)-
+        (1-ro[t+1])*b2*Tv*(Iv+d*Av)- Tv*(b5*J+b6*Jv+b3*P+b4*Pv)-vaccdelay*Tv
+      dV=vaccdelay*Tv-(1-ro[t+1])*b*V*(I+d*A)-(1-ro[t+1])*b2*V*(Iv+d*Av)-
+        V*(b5*J+b6*Jv+b3*P+b4*Pv)
+      dEv=(1-ro[t+1])*b*V*(I+d*A)+(1-ro[t+1])*b2*V*(Iv+d*Av)+
+        V*(b5*J+b6*Jv+b3*P+b4*Pv)-lv*Ev
+      dPv=lv*Ev-kv*Pv
+      dIv=pv*kv*Pv-(1-uv)*a1*Iv-uv*gv*Iv
+      dJv=uv*gv*Iv-a2*Jv
+      dAv=(1-pv)*kv*Pv-n*Av
+      dR=(1-uA)*n*A+(1-u)*a1*I+f*a2*J + n*Av+(1-uv)*a1*Iv+a2*Jv
+      dD=(1-f)*a2*J
+      
+      Dout=c(dS,dE,dP,dI,dJ,dA,dT,dV,dEv,dPv,dIv,dJv,dAv,dR,dD)
+      #print(sum(Dout))
+      return(list(Dout))
+    })
+  }
+  ode_MSE=function(x, y0=y0, data=Simu){
+    'The objective function of the DE optimisation - 
+      The RMSE between the simulated data and the data produced 
+        using the parameter vectors given in each generation of DE.'
+    a1_inv=x[1]
+    a1=1/a1_inv
+    a2_inv=x[2]
+    a2=1/a2_inv
+    k_inv=x[3]
+    k=1/k_inv
+    vaccdelay_inv=x[4]
+    vaccdelay=1/vaccdelay_inv
+    d=x[5]
+    n_inv=x[6]
+    n=1/n_inv
+    f=x[7]
+    p=x[8]
+    pv=x[9]
+    u=x[10]
+    uv=u
+    uA=x[11]
+    g=x[12]
+    l_inv=x[13]
+    l=1/l_inv
+    b=x[14]
+    b1=b
+    db2=x[15]
+    b2=db2*b1
+    db3=x[16]
+    b3=db3*b1
+    db4=x[17]
+    b4=db4*b2
+    db5=x[18] 
+    b5=db5*b1
+    db6=x[19]
+    b6=db6*b2
+    v=v_value
+    
+    #The simulated data
+    if (v_value==0.013){
+      Simu=read.csv('SimuNoisy0_013.csv')$x #the noisy simulated data
+      
+      # The simulated data without noise
+      #Simu=read.csv('Simu0_013.csv')
+      #generating incidence data from the not noisy simulated data
+      #Srep=numeric(151)
+      #original_par=c(0.9,0.9,1/3,0.75)
+      #uI=original_par[1]
+      #uvI=original_par[2]
+      #gI=original_par[3]
+      #uAI=original_par[4]
+      #for (i in 1:151){
+       # Srep[i+1]=uI*gI*Simu$I[i]+uAI*gI*Simu$A[i]+uvI*gI*Simu$Iv[i] 
+      #} #not noisy incidence data
+      #Simu=Srep
+    }
+    if (v_value==0.005){
+      Simu=read.csv('SimuNoisy0_005.csv')$x
+    }
+    
+    #Initial Values/ Sizes of each compartment starting on 01/01/2021
+    E=7973/888000 
+    I=280/888000
+    R=6845/888000
+    Tv=0
+    A=1200/888000
+    V=0
+    Ev=0
+    Iv=0
+    Av=0
+    Jv=0
+    J=2520/888000
+    P=4000/888000
+    Pv=0
+    D=127/888000
+    N=888000/888000
+    y0=c(S=N-E-P-I-J-A-Tv-V-Ev-Pv-Iv-Jv-Av-R-D,E=E,
+         P=P, I=I,J=J, A=A, Tv=Tv, V=V, Ev=Ev,
+         Pv=Pv, Iv=Iv, Jv=Jv, Av=Av, R=R, D=D)
+    
+    out=ode(y=y0,times=seq(0,150, by=1),func = SEPIJARV_opt, parms=x, 
+            method='ode45') #function to solve the ODEs given in SEPIJARV_opt
+    out=as.data.frame(out)
+    #generating the incidence data from data given by 'out'
+    rep=numeric(151)
+    for (i in 1:151){
+      rep[i+1]=u*g*out$I[i]+uA*g*out$A[i]+uv*g*out$Iv[i]
+    }
+    error=rmse(Simu, rep) #RMSE between the original simulated incidence data 
+    return(error)          #and the incidence data generated using the parameter 
+  }                         #vector from the current generation
+  
+  #lower limit of each parameter
+  lower=c(3,5,1,7,0.3,3,0.8,0,0,0,0,0,1,0.2,0,0,0,0,0)
+  #upper limit of each parameter
+  upper=c(7,15,7,15,1,9,1,1,1,1,1,1,3,5,1,1,1,1,1)
+  
+  #Running DEoptim command to find optimal parameters 
+   #using strategy 2: DE/local-to-best/1/bin
+   # strategy 1: DE/rand/1/bin
+  opt=DEoptim(ode_MSE ,lower,upper, 
+              control = list(strategy =2 ,itermax=niter,NP=200)) 
+  
+  
+  optimal_parms=opt[['optim']][["bestmem"]]
+  names(optimal_parms)=c('a1_inv','a2_inv','k_inv','vaccdelay_inv',
+                         'd','n_inv','f','p','pv','u','uA','g','l_inv',
+                         'b','b2','b3','b4','b5','b6')
+  new_dat=as.data.frame(ode(y=y0,times=seq(0,150, by=1),
+                            func = SEPIJARV_opt, 
+                            parms=optimal_parms, 
+                            method='ode45')) #calculate the data using the 
+                                              #parameters given by DE
+
+  return(list(opt,new_dat,optimal_parms))
+}
+#Each time optimisation() function was run, each result was saved into an .csv file 
+ #which was later on used for the analysis
+
+# --- Expressions used to calculate the Next Generation Matrix ---#
+FE=quote((1-ro)*b1*S*(I+d*A)+(1-ro)*b2*S*(Iv+d*Av)
+         +S*(b5*J+b6*Jv+b3*P+b4*Pv)+(1-ro)*b1*Tv*(I+d*A)
+         +(1-ro)*b2*Tv*(Iv+d*Av)+Tv*(b5*J+b6*Jv+b3*P+b4*Pv))
+FP=0
+FI=0
+FJ=0
+FA=0
+FEv=quote((1-ro)*b1*V*(I+d*A)+
+            (1-ro)*b2*V*(Iv+d*Av)+V*(b5*J+b6*Jv+b3*P+b4*Pv))
+FPv=0
+FIv=0
+FJv=0
+FAv=0
+
+Ff=matrix(c(FE,FP,FI,FJ,FA,FEv,FPv,FIv,FJv,FAv), nrow=10) 
+
+VnE=quote(l*E)
+VnP=quote(k*P)
+VnI=quote((1-u)*a1*I+u*g*I)
+VnJ=quote(a2*J)
+VnA=quote((1-uA)*n*A+uA*g*A)
+VnEv=quote(lv*Ev)
+VnPv=quote(kv*Pv)
+VnIv=quote((1-uv)*a1*Iv+uv*gv*Iv)
+VnJv=quote(a2*Jv)
+VnAv=quote(n*Av)
+
+
+VpE=0
+VpP=quote(l*E)
+VpI=quote(p*k*P)
+VpJ=quote(u*g*I+uA*g*A)
+VpA=quote((1-p)*k*P)
+VpEv=0
+VpPv=quote(lv*Ev)
+VpIv=quote(pv*kv*Pv)
+VpJv=quote(uv*gv*Iv)
+VpAv=quote((1-pv)*kv*Pv)
+
+VE=substitute(a-b, list(a=VnE, b=VpE))
+VP=substitute(a-b, list(a=VnP, b=VpP))
+VI=substitute(a-b, list(a=VnI, b=VpI))
+VJ=substitute(a-b, list(a=VnJ, b=VpJ))
+VA=substitute(a-b, list(a=VnA, b=VpA))
+VEv=substitute(a-b, list(a=VnEv, b=VpEv))
+VPv=substitute(a-b, list(a=VnPv, b=VpPv))
+VIv=substitute(a-b, list(a=VnIv, b=VpIv))
+VJv=substitute(a-b, list(a=VnJv, b=VpJv))
+VAv=substitute(a-b, list(a=VnAv, b=VpAv))
+
+VV=matrix(c(VE,VP,VI,VJ,VA,VEv,VPv,VIv,VJv,VAv), nrow=10)
+
+fEE=D(FE,'E');fEP=D(FE,'P');fEI=D(FE,'I');fEJ=D(FE,'J');fEA=D(FE,'A');
+fPE=D(FP,'E');fPP=D(FP,'P');fPI=D(FP,'I');fPJ=D(FP,'J');fPA=D(FP,'A');
+fIE=D(FI,'E');fIP=D(FI,'P');fII=D(FI,'I');fIJ=D(FI,'J');fIA=D(FI,'A');
+fJE=D(FJ,'E');fJP=D(FJ,'P');fJI=D(FJ,'I');fJJ=D(FJ,'J');fJA=D(FJ,'A');
+fAE=D(FA,'E');fAP=D(FA,'P');fAI=D(FA,'I');fAJ=D(FA,'J');fAA=D(FA,'A');
+
+fEEv=D(FE,'Ev');fEPv=D(FE,'Pv');fEIv=D(FE,'Iv');fEJv=D(FE,'Jv');fEAv=D(FE,'Av');
+fPEv=D(FP,'Ev');fPPv=D(FP,'Pv');fPIv=D(FP,'Iv');fPJv=D(FP,'Jv');fPAv=D(FP,'Av');
+fIEv=D(FI,'Ev');fIPv=D(FI,'Pv');fIIv=D(FI,'Iv');fIJv=D(FI,'Jv');fIAv=D(FI,'Av');
+fJEv=D(FJ,'Ev');fJPv=D(FJ,'Pv');fJIv=D(FJ,'Iv');fJJv=D(FJ,'Jv');fJAv=D(FJ,'Av');
+fAEv=D(FA,'Ev');fAPv=D(FA,'Pv');fAIv=D(FA,'Iv');fAJv=D(FA,'Jv');fAAv=D(FA,'Av');
+
+fEvE=D(FEv,'E');fEvP=D(FEv,'P');fEvI=D(FEv,'I');fEvJ=D(FEv,'J');fEvA=D(FEv,'A');
+fPvE=D(FPv,'E');fPvP=D(FPv,'P');fPvI=D(FPv,'I');fPvJ=D(FPv,'J');fPvA=D(FPv,'A');
+fIvE=D(FIv,'E');fIvP=D(FIv,'P');fIvI=D(FIv,'I');fIvJ=D(FIv,'J');fIvA=D(FIv,'A');
+fJvE=D(FJv,'E');fJvP=D(FJv,'P');fJvI=D(FJv,'I');fJvJ=D(FJv,'J');fJvA=D(FJv,'A');
+fAvE=D(FAv,'E');fAvP=D(FAv,'P');fAvI=D(FAv,'I');fAvJ=D(FAv,'J');fAvA=D(FAv,'A');
+
+fEvEv=D(FEv,'Ev');fEvPv=D(FEv,'Pv');fEvIv=D(FEv,'Iv');fEvJv=D(FEv,'Jv');fEvAv=D(FEv,'Av');
+fPvEv=D(FPv,'Ev');fPvPv=D(FPv,'Pv');fPvIv=D(FPv,'Iv');fPvJv=D(FPv,'Jv');fPvAv=D(FPv,'Av');
+fIvEv=D(FIv,'Ev');fIvPv=D(FIv,'Pv');fIvIv=D(FIv,'Iv');fIvJv=D(FIv,'Jv');fIvAv=D(FIv,'Av');
+fJvEv=D(FJv,'Ev');fJvPv=D(FJv,'Pv');fJvIv=D(FJv,'Iv');fJvJv=D(FJv,'Jv');fJvAv=D(FJv,'Av');
+fAvEv=D(FAv,'Ev');fAvPv=D(FAv,'Pv');fAvIv=D(FAv,'Iv');fAvJv=D(FAv,'Jv');fAvAv=D(FAv,'Av');
+
+
+vEE=D(VE,'E');vEP=D(VE,'P');vEI=D(VE,'I');vEJ=D(VE,'J');vEA=D(VE,'A');
+vPE=D(VP,'E');vPP=D(VP,'P');vPI=D(VP,'I');vPJ=D(VP,'J');vPA=D(VP,'A');
+vIE=D(VI,'E');vIP=D(VI,'P');vII=D(VI,'I');vIJ=D(VI,'J');vIA=D(VI,'A');
+vJE=D(VJ,'E');vJP=D(VJ,'P');vJI=D(VJ,'I');vJJ=D(VJ,'J');vJA=D(VJ,'A');
+vAE=D(VA,'E');vAP=D(VA,'P');vAI=D(VA,'I');vAJ=D(VA,'J');vAA=D(VA,'A');
+
+vEEv=D(VE,'Ev');vEPv=D(VE,'Pv');vEIv=D(VE,'Iv');vEJv=D(VE,'Jv');vEAv=D(VE,'Av');
+vPEv=D(VP,'Ev');vPPv=D(VP,'Pv');vPIv=D(VP,'Iv');vPJv=D(VP,'Jv');vPAv=D(VP,'Av');
+vIEv=D(VI,'Ev');vIPv=D(VI,'Pv');vIIv=D(VI,'Iv');vIJv=D(VI,'Jv');vIAv=D(VI,'Av');
+vJEv=D(VJ,'Ev');vJPv=D(VJ,'Pv');vJIv=D(VJ,'Iv');vJJv=D(VJ,'Jv');vJAv=D(VJ,'Av');
+vAEv=D(VA,'Ev');vAPv=D(VA,'Pv');vAIv=D(VA,'Iv');vAJv=D(VA,'Jv');vAAv=D(VA,'Av');
+
+vEvE=D(VEv,'E');vEvP=D(VEv,'P');vEvI=D(VEv,'I');vEvJ=D(VEv,'J');vEvA=D(VEv,'A');
+vPvE=D(VPv,'E');vPvP=D(VPv,'P');vPvI=D(VPv,'I');vPvJ=D(VPv,'J');vPvA=D(VPv,'A');
+vIvE=D(VIv,'E');vIvP=D(VIv,'P');vIvI=D(VIv,'I');vIvJ=D(VIv,'J');vIvA=D(VIv,'A');
+vJvE=D(VJv,'E');vJvP=D(VJv,'P');vJvI=D(VJv,'I');vJvJ=D(VJv,'J');vJvA=D(VJv,'A');
+vAvE=D(VAv,'E');vAvP=D(VAv,'P');vAvI=D(VAv,'I');vAvJ=D(VAv,'J');vAvA=D(VAv,'A');
+
+vEvEv=D(VEv,'Ev');vEvPv=D(VEv,'Pv');vEvIv=D(VEv,'Iv');vEvJv=D(VEv,'Jv');vEvAv=D(VEv,'Av');
+vPvEv=D(VPv,'Ev');vPvPv=D(VPv,'Pv');vPvIv=D(VPv,'Iv');vPvJv=D(VPv,'Jv');vPvAv=D(VPv,'Av');
+vIvEv=D(VIv,'Ev');vIvPv=D(VIv,'Pv');vIvIv=D(VIv,'Iv');vIvJv=D(VIv,'Jv');vIvAv=D(VIv,'Av');
+vJvEv=D(VJv,'Ev');vJvPv=D(VJv,'Pv');vJvIv=D(VJv,'Iv');vJvJv=D(VJv,'Jv');vJvAv=D(VJv,'Av');
+vAvEv=D(VAv,'Ev');vAvPv=D(VAv,'Pv');vAvIv=D(VAv,'Iv');vAvJv=D(VAv,'Jv');vAvAv=D(VAv,'Av');
+
+# --- Function implemented to estimate R_t given the parameter values obtained by DE --- #
+
+DE_calc_Rt=function(v_value,data, x){
+  'Calculates Rt given the parameter values from DE'
+  Rt=numeric(151)
+  for (t in 1:151){
+    a1_inv=x[1]
+    a1=1/a1_inv
+    a2_inv=x[2]
+    a2=1/a2_inv
+    k_inv=x[3]
+    k=1/k_inv
+    kv=k
+    vaccdelay_inv=x[4]
+    vaccdelay=1/vaccdelay_inv
+    d=x[5]
+    n_inv=x[6]
+    n=1/n_inv
+    f=x[7]
+    p=x[8]
+    pv=x[9]
+    u=x[10]
+    uv=u
+    uA=x[11]
+    g=x[12]
+    gv=g
+    l_inv=x[13]
+    l=1/l_inv
+    lv=l
+    b=x[14]
+    b1=b
+    db2=x[15]
+    b2=db2*b1
+    db3=x[16]
+    b3=db3*b1
+    db4=x[17]
+    b4=db4*b2
+    db5=x[18] 
+    b5=db5*b1
+    db6=x[19]
+    b6=db6*b2
+    v=v_value
+    ro=(SDpar$stringency_index)/100
+    
+    parameters=list(S=data$S[t],E=data$E[t],P=data$P[t], I=data$I[t],
+                    J=data$J[t], A=data$A[t], 
+                    Tv=data$Tv[t], V=data$V[t], Ev=data$Ev[t], Pv=data$Pv[t], 
+                    Iv=data$Iv[t], Jv=data$Jv[t], Av=data$Av[t], R=data$R[t], 
+                    D=data$D[t],  
+                       a1=a1, a2=a2, k=k,kv=kv,
+                       d=d, n=n,  f=f, p=p, pv=pv,
+                       vaccdelay=vaccdelay, u=u, uv=uv,
+                       uA=uA, g=g, gv=gv, 
+                       l=l, lv=lv, v=v_value,
+                       ro=ro[t], b1=b, b2=b2, b3=b3, b4=b4,
+                       b5=b5, b6=b6)
+    
+    f=with(parameters, 
+           matrix(c(eval(fEE),eval(fEP),eval(fEI),eval(fEJ),eval(fEA),
+                    eval(fEEv),eval(fEPv),eval(fEIv),eval(fEJv),eval(fEAv), 
+                    eval(fPE),eval(fPP),eval(fPI),eval(fPJ),eval(fPA),
+                    eval(fPEv),eval(fPPv),eval(fPIv),eval(fPJv),eval(fPAv),
+                    eval(fIE),eval(fIP),eval(fII),eval(fIJ),eval(fIA),
+                    eval(fIEv),eval(fIPv),eval(fIIv),eval(fIJv),eval(fIAv),
+                    eval(fJE),eval(fJP),eval(fJI),eval(fJJ),eval(fJA),
+                    eval(fJEv),eval(fJPv),eval(fJIv),eval(fJJv),eval(fJAv),
+                    eval(fAE), eval(fAP),eval(fAI),eval(fAJ),eval(fAA),
+                    eval(fAEv), eval(fAPv),eval(fAIv),eval(fAJv),eval(fAAv),
+                    eval(fEvE),eval(fEvP),eval(fEvI),eval(fEvJ),eval(fEvA),
+                    eval(fEvEv),eval(fEvPv),eval(fEvIv),eval(fEvJv),eval(fEvAv), 
+                    eval(fPvE),eval(fPvP),eval(fPvI), eval(fPvJ),eval(fPvA),
+                    eval(fPvEv),eval(fPvPv),eval(fPvIv),eval(fPvJv),eval(fPvAv),
+                    eval(fIvE),eval(fIvP),eval(fIvI),eval(fIvJ),eval(fIvA),
+                    eval(fIvEv),eval(fIvPv),eval(fIvIv),eval(fIvJv),eval(fIvAv),
+                    eval(fJvE), eval(fJvP),eval(fJvI),eval(fJvJ),eval(fJvA),
+                    eval(fJvEv),eval(fJvPv),eval(fJvIv),eval(fJvJv),eval(fJvAv),
+                    eval(fAvE), eval(fAvP),eval(fAvI),eval(fAvJ), eval(fAvA),
+                    eval(fAvEv), eval(fAvPv),eval(fAvIv),eval(fAvJv),eval(fAvAv)),
+                    nrow=10, byrow=TRUE))
+    
+    vv=with(parameters, 
+            matrix(c(eval(vEE),eval(vEP),eval(vEI),eval(vEJ),eval(vEA),
+                     eval(vEEv),eval(vEPv),eval(vEIv),eval(vEJv),eval(vEAv),
+                     eval(vPE),eval(vPP),eval(vPI),eval(vPJ),eval(vPA),
+                     eval(vPEv),eval(vPPv),eval(vPIv),eval(vPJv),eval(vPAv),
+                     eval(vIE),eval(vIP),eval(vII),eval(vIJ),eval(vIA),
+                     eval(vIEv),eval(vIPv),eval(vIIv),eval(vIJv),eval(vIAv),
+                     eval(vJE),eval(vJP),eval(vJI),eval(vJJ),eval(vJA),
+                     eval(vJEv),eval(vJPv),eval(vJIv),eval(vJJv),eval(vJAv),
+                     eval(vAE), eval(vAP),eval(vAI),eval(vAJ),eval(vAA),
+                     eval(vAEv), eval(vAPv),eval(vAIv),eval(vAJv),eval(vAAv),
+                     eval(vEvE),eval(vEvP),eval(vEvI),eval(vEvJ),eval(vEvA),
+                     eval(vEvEv),eval(vEvPv),eval(vEvIv),eval(vEvJv),eval(vEvAv),
+                     eval(vPvE),eval(vPvP),eval(vPvI), eval(vPvJ),eval(vPvA),
+                     eval(vPvEv),eval(vPvPv),eval(vPvIv),eval(vPvJv),eval(vPvAv),
+                     eval(vIvE),eval(vIvP),eval(vIvI),eval(vIvJ),eval(vIvA),
+                     eval(vIvEv),eval(vIvPv),eval(vIvIv),eval(vIvJv),eval(vIvAv),
+                     eval(vJvE),eval(vJvP),eval(vJvI),eval(vJvJ),eval(vJvA),
+                     eval(vJvEv),eval(vJvPv),eval(vJvIv),eval(vJvJv),eval(vJvAv),
+                     eval(vAvE), eval(vAvP),eval(vAvI),eval(vAvJ),eval(vAvA),
+                     eval(vAvEv),eval(vAvPv),eval(vAvIv),eval(vAvJv),eval(vAvAv)),
+                     nrow=10, byrow=TRUE))
+    
+    Rt[t]=(max(eigen(f %*% solve(vv))$values)) #basic reproduction number
+  }
+  
+  Rt=as.data.frame(Rt)
+  return(Rt)
+}
+
+DE_data_management=function(DE013res, v){
+  'Returns all data obtained by DE and the optimal values 
+    and RMSE for each algorithm and scenario'
+  
+  DE013res$X=gsub('par2','a2_inv',DE013res$X)
+  DE013res$X=gsub('par3','k_inv',DE013res$X)
+  DE013res$X=gsub('par4','phi_inv',DE013res$X)
+  DE013res$X=gsub('par5','d',DE013res$X)
+  DE013res$X=gsub('par6','n_inv',DE013res$X)
+  DE013res$X=gsub('par7','f',DE013res$X)
+  DE013res$X=gsub('par8','p',DE013res$X)
+  DE013res$X=gsub('par9','pv',DE013res$X)
+  DE013res$X=gsub('par10','u',DE013res$X)
+  DE013res$X=gsub('par11','uA',DE013res$X)
+  DE013res$X=gsub('par12','g',DE013res$X)
+  DE013res$X=gsub('par13','l_inv',DE013res$X)
+  DE013res$X=gsub('par14','b1',DE013res$X)
+  DE013res$X=gsub('par15','db2',DE013res$X)
+  DE013res$X=gsub('par16','db3',DE013res$X)
+  DE013res$X=gsub('par17','db4',DE013res$X)
+  DE013res$X=gsub('par18','db5',DE013res$X)
+  DE013res$X=gsub('par19','db6',DE013res$X)
+  DE013res$X=gsub('par1','a1_inv',DE013res$X)
+
+  names(DE013res)=c('par','optPar','MinVal', 'Scenario')
+    
+  DE013res$Scenario=as.factor(DE013res$Scenario)
+    
+  MinValues = aggregate(DE013res$MinVal,
+                        by=list(DE013res$Scenario), min)
+  
+  most_optimum=DE013res %>% filter(MinVal %in% MinValues[,2])
+
+  DE013res$par=as.factor(DE013res$par)
+  
+  return(list(DE013res, most_optimum))
+}
+
+
+## --- Commands for the Analysis ---##
+#---DE for v=0.013---#
+DE013res=read.csv('DEAllParms013.csv')
+
+Strat1=(read.csv('Opt1000_013_par2.csv')[,1:3])
+names(Strat1)=names(DE013res)
+
+not_noise=rbind(read.csv('Optnotnoisy_013_par11.csv')[,1:3],
+                     read.csv('Optnotnoisy_013_par22.csv')[,1:3],
+                     read.csv('Optnotnoisy_013_par33.csv')[,1:3],
+                     read.csv('Optnotnoisy_013_par44.csv')[,1:3],
+                     read.csv('Optnotnoisy_013_par55.csv')[,1:3],
+                     read.csv('Optnotnoisy_013_par6.csv')[,1:3],
+                     read.csv('Optnotnoisy_013_par7.csv')[,1:3],
+                     read.csv('Optnotnoisy_013_par8.csv')[,1:3],
+                     read.csv('Optnotnoisy_013_par9.csv')[,1:3],
+                     read.csv('Optnotnoisy_013_par10.csv')[,1:3])
+names(not_noise)=names(DE013res)
+
+DE013res=rbind(DE013res, Strat1, not_noise)
+names(DE013res)=c('X','bestmem','bestval')
+DE013res=rbind(DE013res, 
+               read.csv('Opt400_013_par2.csv')[,1:3],
+               read.csv('Opt400_013_par3.csv')[,1:3],
+               read.csv('Opt400_013_par4.csv')[,1:3],
+               read.csv('Opt400_013_par5.csv')[,1:3])
+
+DE013res$Scenario=c(rep('Strategy 2-200 iterations',times=19*10), 
+                    rep('Strategy 2-400 iterations',times=19), 
+                    rep('Strategy 1',times=19), 
+                    rep('No noise added',times=19*10), 
+                    rep('Strategy 2-400 iterations',times=19*4))
+
+DE013=DE_data_management(DE013res, 0.013)
+DE013[[1]]=cbind(DE013[[1]],
+                 DE013[[2]]%>%filter(MinVal ==min(MinVal))
+                 %>%select(optPar))
+
+DE013res=DE013[[1]]
+DE013res$Original=rep(c(5,14,2,14,0.6,6,0.998,0.70,0.15,0.9,0.75,
+                        1/3,3.8,NA,0.6,0.8,0.8,0.05,0.05), times=26) #true values
+
+names(DE013res)=c('par','optPar','MinVal', 'Scenario','Optimal','Original')
+
+aggregate(DE013res$MinVal,by=list(DE013res$Scenario),mean) #mean RMSE for each scenario/algorithm
+aggregate(DE013res$MinVal,by=list(DE013res$Scenario),max) #max RMSE for each scenario/algorithm
+
+
+#---Data with v=0.005---#
+
+DE005res=read.csv('DEAll005.csv')
+names(DE005res)=c('X','bestmem','bestval')
+
+DE005res=rbind(DE005res, 
+               read.csv('Opt400_005_par1.csv')[,1:3],
+               read.csv('Opt400_005_par2.csv')[,1:3],
+               read.csv('Opt400_005_par3.csv')[,1:3],
+               read.csv('Opt400_005_par4.csv')[,1:3],
+               read.csv('Opt400_005_par5.csv')[,1:3])
+
+DE005res$Scenario=c(rep('Strategy 2-200 iterations',times=19*10), 
+                    rep('Strategy 2-400 iterations',times=19*5))
+
+DE005=DE_data_management(DE005res, 0.005)
+DE005[[1]]=cbind(DE005[[1]],
+                 DE005[[2]]%>%filter(MinVal ==min(MinVal))
+                 %>%select(optPar))
+DE005res=DE005[[1]]
+DE005res$Original=rep(c(5,14,2,14,0.6,6,0.998,0.70,0.15,0.9,0.75,
+                        1/3,3.8, NA, 0.6,0.8,0.8,0.05,0.05), times=15)
+
+names(DE005res)=c('par','optPar','MinVal', 'Scenario','Optimal','Original')
+
+aggregate(DE005res$MinVal,by=list(DE005res$Scenario),mean)  #mean RMSE for each scenario/algorithm
+
+
+
+## --- Boxplots ---##
+### --- v=0.013 --- ###
+rates_probs=as.data.frame(subset(DE013res,
+                                 par %in% c('b1','db2','db3',
+                                                      'db4','db5','db6','d',
+                                            'f','g','p','pv','u','uA')))
+
+period_durations=as.data.frame(subset(DE013res, 
+                                      par %in% c('a1_inv','a2_inv',
+                                                 'phi_inv','n_inv',
+                                                 'k_inv','l_inv')))
+
+names(period_durations)=c('par','optPar','MinVal',
+                          'Scenario','Optimal','Original')
+
+names(rates_probs)=c('par','optPar','MinVal', 'Scenario','Optimal','Original')
+
+ggplot(rates_probs, aes(x=par, y=variables, group=par, color=variable)) +
+  theme(legend.position="bottom")+
+  labs(color='Parameter Values')+
+  geom_boxplot(aes(y=optPar, col='Estimated'),alpha=0.7) +
+  xlab('Parameters')+
+  ylab('Parameter values returned by DE')+
+  geom_point(aes(y=Original,col='True'), size=0.9, shape=3)+
+  geom_point(aes(y=Optimal, col='Optimal'),size=0.9, shape=2)+
+  scale_color_manual(values=c("Black","Red","Blue"))+
+  theme(legend.key.size = unit(5, 'mm'), 
+        plot.title = element_text(size = unit(11,'cm')),
+          axis.text = element_text(size = unit(8,'cm')),
+          axis.title = element_text(size = unit(11,'cm')),
+          legend.text = element_text(size = unit(8, 'mm')),
+          legend.title =element_text(size = unit(8, 'mm')),
+          legend.position = 'bottom')+
+  facet_wrap(~Scenario)+
+  ggtitle('Parameter values for v=0.013')+
+  scale_x_discrete(labels=c('b1'=expression(beta*1),'db2'=expression(d*beta*2),
+                            'db3'=expression(d*beta*3),'db4'=expression(d*beta*4),
+                            'db5'=expression(d*beta*5),'db6'=expression(d*beta*6),
+                            'd'=expression(delta),'f'=expression(f),
+                            'g'=expression(gamma),'p'=expression(p),
+                            'pv'=expression(pv),'u'=expression(u),
+                            'uA'=expression(uA)))
+
+ggsave(file = "DpPar013.pdf", width = 7.30,height=3.9, units=c('in'))
+
+ggplot(period_durations, aes(x=par, y=variables, group=par, color=variable)) +
+  theme(legend.position="bottom")+
+  labs(color='Parameter Values')+
+  geom_boxplot(aes(y=optPar, col='Estimated'),alpha=0.7) +
+  xlab('Inverse of the rates / Length of the period in the compartments')+
+  ylab('Parameter values returned by DE')+
+  geom_point(aes(y=Original,col='True'), size=0.9, shape=3)+
+  geom_point(aes(y=Optimal, col='Optimal'), size=0.9, shape=2)+
+  scale_color_manual(values=c("Black","Red","Blue"))+
+  theme(legend.key.size = unit(5, 'mm'), 
+        plot.title = element_text(size = unit(11,'cm')),
+          axis.text = element_text(size = unit(8,'cm')),
+          axis.title = element_text(size = unit(11,'cm')),
+          legend.text = element_text(size = unit(8, 'mm')),
+          legend.title =element_text(size = unit(8, 'mm')),
+          legend.position = 'bottom')+
+  facet_wrap(~Scenario)+
+  ggtitle('Inverse of the rates for v=0.013')+
+  scale_x_discrete(labels=c('a1_inv'= expression(1/alpha*1 ),
+                            'a2_inv'= expression(1/alpha*2),
+                            'k_inv'=expression(1/kappa), 
+                            'phi_inv'=expression(1/phi),
+                            'n_inv'='1/n', 'l_inv'='1/l'))
+
+ggsave(file = "DEparrates013.pdf", width = 7.30,height=3.9, units=c('in'))
+
+### --- v=0.005 --- ###
+rates_probs=as.data.frame(subset(DE005res,
+                                 par%in%c('b1','db2','db3','db4',
+                                          'db5','db6','d','f',
+                                          'g','p','pv','u','uA')))
+
+period_durations=as.data.frame(subset(DE005res, 
+                                      par %in% c('a1_inv','a2_inv','phi_inv',
+                                                 'n_inv','k_inv','l_inv')))
+
+names(period_durations)=c('par','optPar','MinVal',
+                          'Scenario','Optimal','Original')
+
+names(rates_probs)=c('par','optPar','MinVal', 'Scenario','Optimal','Original')
+
+ggplot(rates_probs, aes(x=par, y=variables, group=par, color=variable)) +
+  theme(legend.position="bottom")+
+  labs(color='Parameter Values')+
+  geom_boxplot(aes(y=optPar, col='Estimated'),alpha=0.7) +
+  xlab('Parameters')+ylab('Parameter values returned by DE')+
+  geom_point(aes(y=Optimal,col='Optimal'),alpha=0.5,size=1.5, shape=2)+
+  geom_point(aes(y=Original,col='True'),size=1.5, shape=3)+
+  theme(legend.key.size = unit(5, 'mm'), 
+        plot.title = element_text(size = unit(11,'cm')),
+          axis.text = element_text(size = unit(8,'cm')),
+          axis.title = element_text(size = unit(11,'cm')),
+          legend.text = element_text(size = unit(9, 'mm')),
+          legend.title =element_text(size = unit(9, 'mm')),
+          legend.position = 'bottom')+
+  scale_color_manual(values=c("Black","Red","Blue"))+
+  facet_wrap(~Scenario)+
+  ggtitle('Parameter values with v=0.005')+
+  scale_x_discrete(labels=c('b1'=expression(beta*1),'db2'=expression(d*beta*2),
+                            'db3'=expression(d*beta*3),'db4'=expression(d*beta*4),
+                            'db5'=expression(d*beta*5),'db6'=expression(d*beta*6),
+                            'd'=expression(delta),'f'=expression(f),
+                            'g'=expression(gamma),'p'=expression(p),
+                            'pv'=expression(pv),'u'=expression(u),
+                            'uA'=expression(uA)))
+
+ggsave(file = "DEpar005.pdf", width = 7.30,height=3.9, units=c('in'))
+
+ggplot(period_durations, aes(x=par, y=variables, group=par, color=variable)) +
+  theme(legend.position="bottom")+
+  labs(color='Parameter Values')+
+  geom_boxplot(aes(y=optPar, col='Estimated'),alpha=0.7) +
+  xlab('Inverse of the rates / Length of the period in the compartments')+
+  ylab('Parameter values returned by DE')+
+  geom_point(aes(y=Optimal,col='Optimal'),alpha=0.5, size=1.5, shape=2)+
+  geom_point(aes(y=Original,col='True'),size=1.5, shape=3)+
+  theme(legend.key.size = unit(5, 'mm'), 
+        plot.title = element_text(size = unit(11,'cm')),
+          axis.text = element_text(size = unit(8,'cm')),
+          axis.title = element_text(size = unit(11,'cm')),
+          legend.text = element_text(size = unit(9, 'mm')),
+          legend.title =element_text(size = unit(9, 'mm')),
+          legend.position = 'bottom')+
+  scale_color_manual(values=c("Black","Red","Blue"))+
+  ggtitle('Inverse of the rates with v=0.005')+
+  facet_wrap(~Scenario)+
+  scale_x_discrete(labels=c('a1_inv'= expression(1/alpha*1 ),
+                            'a2_inv'= expression(1/alpha*2),
+                            'k_inv'=expression(1/kappa), 
+                            'phi_inv'=expression(1/phi), 
+                            'n_inv'='1/n', 'l_inv'='1/l'))
+
+ggsave(file = "DEparrates005.pdf", width = 7.30,height=3.9, units=c('in'))
+
+# --- Generating the Incidence data --- #
+SEPIJARV_opt=function(t,y,parms){
+    a1_inv=parms[1]
+    a1=1/a1_inv
+    a2_inv=parms[2]
+    a2=1/a2_inv
+    k_inv=parms[3]
+    k=1/k_inv
+    kv=k
+    vaccdelay_inv=parms[4]
+    vaccdelay=1/vaccdelay_inv
+    d=parms[5]
+    n_inv=parms[6]
+    n=1/n_inv
+    nv=n
+    f=parms[7]
+    p=parms[8]
+    pv=parms[9]
+    u=parms[10]
+    uv=u
+    uA=parms[11]
+    g=parms[12]
+    gv=g
+    l_inv=parms[13]
+    l=1/l_inv
+    lv=l
+    b=parms[14]
+    b1=b
+    db2=parms[15]
+    b2=db2*b1
+    db3=parms[16]
+    b3=db3*b1
+    db4=parms[17]
+    b4=db4*b2
+    db5=parms[18] 
+    b5=db5*b1
+    db6=parms[19]
+    b6=db6*b2
+    v=parms[20]
+    ro=(SDpar$stringency_index)/100
+    with(as.list(y),{
+      
+      dS=-(1-ro[t+1])*b*S*(I+d*A)-(1-ro[t+1])*b2*S*(Iv+d*Av)-
+        S*(b5*J+b6*Jv+b3*P+b4*Pv+v)
+      dE=(1-ro[t+1])*b*S*(I+d*A)+(1-ro[t+1])*b2*S*(Iv+d*Av)+
+        S*(b5*J+b6*Jv+b3*P+b4*Pv)+
+        (1-ro[t+1])*b*Tv*(I+d*A)+(1-ro[t+1])*b2*Tv*(Iv+d*Av)+
+        Tv*(b5*J+b6*Jv+b3*P+b4*Pv)-l*E
+      dP=l*E-k*P
+      dI=p*k*P-(1-u)*a1*I-u*g*I
+      dJ=u*g*I-a2*J+uA*g*A
+      dA=(1-p)*k*P-(1-uA)*n*A-uA*g*A
+      
+      dT=S*v-(1-ro[t+1])*b*Tv*(I+d*A)-
+        (1-ro[t+1])*b2*Tv*(Iv+d*Av)- Tv*(b5*J+b6*Jv+b3*P+b4*Pv)-vaccdelay*Tv
+      dV=vaccdelay*Tv-(1-ro[t+1])*b*V*(I+d*A)-(1-ro[t+1])*b2*V*(Iv+d*Av)-
+        V*(b5*J+b6*Jv+b3*P+b4*Pv)
+      dEv=(1-ro[t+1])*b*V*(I+d*A)+(1-ro[t+1])*b2*V*(Iv+d*Av)+
+        V*(b5*J+b6*Jv+b3*P+b4*Pv)-lv*Ev
+      dPv=lv*Ev-kv*Pv
+      dIv=pv*kv*Pv-(1-uv)*a1*Iv-uv*gv*Iv
+      dJv=uv*gv*Iv-a2*Jv
+      dAv=(1-pv)*kv*Pv-n*Av
+      dR=(1-uA)*n*A+(1-u)*a1*I+f*a2*J + n*Av+(1-uv)*a1*Iv+a2*Jv
+      dD=(1-f)*a2*J
+      
+      Dout=c(dS,dE,dP,dI,dJ,dA,dT,dV,dEv,dPv,dIv,dJv,dAv,dR,dD)
+      return(list(Dout))
+    })
+}
+
+estimated_data=function(par, v_value){
+  'generates incidence and full epidemiological data
+    from the parameter vector returned by DE'
+    y0=c(S=865055,E=7973,
+         P=4000, I=280,J=2520, A=1200, Tv=0, V=0, Ev=0,
+         Pv=0, Iv=0, Jv=0, Av=0, R=6845, D=127)/888000
+    
+    out=ode(y=y0,times=seq(0,150, by=1),func = SEPIJARV_opt, 
+            parms = c(par,v_value), method='ode45')
+    out=as.data.frame(out)
+    
+    u=par[10]
+    uv=u
+    uA=par[11]
+    g=par[12]
+    gv=g
+    
+    inc=numeric(151)
+    for (i in 1:151){
+      inc[i+1]=u*g*out$I[i]+uA*g*out$A[i]+uv*g*out$Iv[i]
+    }
+    return(list(New_data=out, Incidence=inc))
+}
+
+#--- Generating the incidence and full data using the optimal parameters
+                                                        #given by DE ---#
+data_out_005=estimated_data(par=DE005res$Optimal[1:19] ,v_value=0.005)
+data_out_013=estimated_data(par=DE013res$Optimal[1:19], v_value=0.013)
+
+#--- Calculating Case-RMSE for each scenario ---# 
+
+RMSE005=rmse(data_out_005[[2]]*888000,(read.csv('SimuNoisy0_005.csv')$x)*888000)
+RMSE013=rmse(data_out_013[[2]]*888000,(read.csv('SimuNoisy0_013.csv')$x)*888000)
+
+#--- Calculating Relative (Proportional) RMSE for each scenario ---#
+
+relRMSE005=(DE005[[2]]%>%filter(MinVal==min(MinVal))%>%select(MinVal))[1,]/
+  sum(data_out_005[[2]])
+
+relRMSE013=(DE013[[2]]%>%filter(MinVal==min(MinVal))%>%select(MinVal))[1,]/
+  sum(data_out_013[[2]])
+```
+
+  
+```{r}
+#--- Plot the generated and originally simulated incidence data 
+                                                          #on the same plot---#
+compare_inc_plot=function(inc, v_value){
+  'Plots the generated and simulated (original) incidence data 
+on the same figure'
+  if (v_value==0.013){
+    simu=read.csv('SimuNoisy0_013.csv')
+  }
+  if (v_value==0.005){
+    simu=read.csv('SimuNoisy0_005.csv')
+  }
+  
+  simu=cbind(simu,inc)
+  names(simu)=c('Days','SimulatedInc', 'GeneratedInc')
+  
+  gg=ggplot(simu,aes(x=Days))+
+    geom_line(aes(y=SimulatedInc*888000,col='Simulated (True)'))+
+    geom_line(aes(y=GeneratedInc*888000,col='Generated'))+
+    labs(color='Incidence Data')+
+    ylab('Daily number of new cases')+
+    ggtitle(paste('Incidence data for',v_value,'vaccination rate'))+
+    theme(legend.key.size = unit(7, 'mm'), 
+          plot.title = element_text(size = unit(11,'cm')),
+          axis.text = element_text(size = unit(8,'cm')),
+          axis.title = element_text(size = unit(11,'cm')),
+          legend.text = element_text(size = unit(9, 'mm')),
+          legend.title =element_text(size = unit(9, 'mm')),
+          legend.position = 'bottom')
+  plot(gg)
+  return(gg)
+}
+```
+
+
+```{r}
+#---Plot/Compare the generated and the simulated/true incidence data---#
+GInc05=compare_inc_plot(data_out_005[[2]], v_value=0.005)
+ggsave(file = "DEGInc05.pdf", width = 7.30,height=3.3, units=c('in'))
+GInc13=compare_inc_plot(data_out_013[[2]], v_value=0.013)
+ggsave(file = "DEGInc13.pdf", width = 7.50,height=3.3, units=c('in'))
+
+
+ggarrange(GInc13, GInc05, common.legend = TRUE,legend = 'bottom')
+ggsave(file='DEGIncCommon.pdf', width = 7.30,height=3.3, units=c('in'))
+
+#---Calculate and plot Rt for v=0.013 and v=0.005---#
+#v=0.013
+DERt013=DE_calc_Rt(v_value=0.013,
+                   data=data_out_013[[1]],
+                   x=DE013res$Optimal[1:19])
+DERt013$True=read.csv('Rt_013.csv')$x
+DERt013$t=seq(1,151)
+names(DERt013)=c('Rt','True','t')
+GRt13=ggplot(DERt013,aes(x=t))+
+  geom_line(aes(y=True, col='True Values'))+
+    geom_line(aes(y=Rt, col='Estimated'))+
+    labs(color='Time-Varying R')+
+    xlab('Days')+
+    ylab('Time-Varying R')+
+    ggtitle('Time-Varying R for 0.013 vaccination rate')+
+    theme(legend.key.size = unit(9, 'mm'), 
+          plot.title = element_text(size = unit(9,'cm')),
+          axis.text = element_text(size = unit(7,'cm')),
+          axis.title = element_text(size = unit(9,'cm')),
+          legend.text = element_text(size = unit(7, 'mm')),
+          legend.title =element_text(size = unit(7, 'mm')),
+          legend.position = 'bottom')
+
+mean(abs(DERt013$Rt-DERt013$True))
+rmse(DERt013$True, DERt013$Rt)
+
+#v=0.005
+DERt005=DE_calc_Rt(v_value=0.005,
+                   data=data_out_005[[1]],
+                   x=DE005res$Optimal[1:19])
+
+DERt005$True=read.csv('Rt_005.csv')$x
+DERt005$t=seq(1,151)
+names(DERt005)=c('Rt','True','t')
+GRt05=ggplot(DERt005,aes(x=t))+
+  geom_line(aes(y=True,  col='True Values'))+
+    geom_line(aes(y=Rt,  col='Estimated'))+
+    labs(color='Time-Varying R')+
+    xlab('Days')+
+    ylab('Time-Varying R')+
+    ggtitle('Time-Varying R for 0.005 vaccination rate')+
+    theme(legend.key.size = unit(9, 'mm'), 
+          plot.title = element_text(size = unit(9,'cm')),
+          axis.text = element_text(size = unit(7,'cm')),
+          axis.title = element_text(size = unit(9,'cm')),
+          legend.text = element_text(size = unit(7, 'mm')),
+          legend.title =element_text(size = unit(7, 'mm')),
+          legend.position = 'bottom')
+
+ggarrange(GRt13, GRt05,common.legend = FALSE, legend = 'bottom')
+ggsave(file='DERtCommon.pdf', width = 7.30,height=3.5, units=c('in'))
+
+mean(abs(DERt005$Rt-DERt005$True))
+rmse(DERt005$True, DERt005$Rt)
+
+```
