@@ -1,6 +1,11 @@
 # Published data from the Republic of Cyprus
 ```{r}
 library(ggplot2)
+
+#The published incidence data from the Republic of Cyprus were taken from:
+#Ministry of Health (2021b), ‘Cyprus Covid-19 open data’. Accessed: 08-07-2021.
+#URL: https://www.data.gov.cy/search/type/dataset
+
 data=read.csv('CY Covid19 - AntigenTests Data.csv')[1:151,1:5]
 ```
 ```{r}
@@ -34,9 +39,15 @@ ggsave(file = "Publishedata.pdf", width = 7.30,height=3.9, units=c('in'))
 
 
 ```
-
+# $\rho$ - ‘Government Stringency Index’
 ```{r}
 # --- Plotting parameter rho --- #
+
+#Ritchie, H., Ortiz-Ospina, E., Beltekian, D., Mathieu, E., Hasell, J., Macdonald, B.,
+#Giattino, C., Appel, C., Rod´es-Guirao, L. & Roser, M. (2020), ‘Coronavirus Pandemic
+#(COVID-19 )’, Our World in Data .
+#'https://ourworldindata.org/coronavirus' Accessed: 26-07-2021#
+
 SDpar=read.csv('covid-stringency-index.csv')
 SDpar=SDpar %>% filter(Entity=='Cyprus', Day>='2021-01-01', Day<='2021-05-31')
 ro=(SDpar$stringency_index)/100
