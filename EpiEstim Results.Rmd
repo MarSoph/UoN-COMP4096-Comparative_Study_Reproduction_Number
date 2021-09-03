@@ -95,9 +95,11 @@ values and the ones obtained by DE'
   Rt=cbind(Rt,original, DE)
   l=dim(Rt)[1]
   
-  Bias=mean(abs(Rt$Mean[3:l]-Rt$original[3:l])) #mean absolute bias between estimated and tru Rt
-  RMSE=rmse(Rt$original[3:l],Rt$Mean[3:l]) #RMSE between estimated and tru Rt
+  Rt=Rt[is.na(Rt$Mean)==FALSE,]
   
+  Bias=mean(abs(Rt$Mean-Rt$original))#mean absolute bias between estimated and true Rt
+  RMSE=rmse(Rt$original,Rt$Mean) #RMSE between estimated and true Rt
+    
   gg=ggplot(Rt, aes(x=t_start))+
     labs(color='R')+
     geom_line(aes(y=Mean,col='Estimated Mean (EpiEstim)'))+
@@ -127,6 +129,8 @@ values and the ones obtained by DE'
 ```{r message=FALSE, warning=FALSE}
 SI_Nishiura=c(mu=4.8, sd=2.3) #Nishiura et al. (2020) 
 SI_Du=c(mu=3.96, sd=4.75) #Du et al. (2020)
+SI_Sim=c(mu=5.8,sd=3) #mean incubation interval used in the simulation
+#mu=mean latent period + mean pre-syptomatic period 
 
 
 
@@ -173,11 +177,29 @@ ggarrange(C[[3]],A[[3]],D[[3]],B[[3]],H[[3]],E[[3]],
           common.legend = TRUE, legend = "bottom",
           nrow=3,ncol=2)
 ggsave(file = "EpiEstim_Du.pdf", width = 7.30,height=7.55, units=c('in'))
+```
 
-estimate_R_plots(Rt013_D, what='R', type='l')
-estimate_R_plots(Rt005_D, what='R', type='l')
-estimate_R_plots(Rt013D_D, what='R', type='l')
-estimate_R_plots(Rt005D_D, what='R', type='l')
+```{r}
+##-Daily and Weekly estimations using SI estimation from the parameter values
+#used for the simulation-##
+Rt013_S=Rt_weekly(SimuNoisy013, SI_Sim)
+Rt005_S=Rt_weekly(SimuNoisy005, SI_Sim)
+Rt013D_S=Rt_daily(SimuNoisy013, SI_Sim)
+Rt005D_S=Rt_daily(SimuNoisy005, SI_Sim)
+Rt_notnoisy0.013_S=Rt_weekly(SimuNotNoisy013, SI_Sim)
+Rt_notnoisy0.013D_S=Rt_daily(SimuNotNoisy005, SI_Sim)
+
+A=plot_R(Rt013_S, v=0.013,'Weekly',noise='Poisson')
+B=plot_R(Rt005_S,v=0.005,'Weekly',noise='Poisson')
+C=plot_R(Rt013D_S,v=0.013,'Daily',noise='Poisson')
+D=plot_R(Rt005D_S,v=0.005,'Daily',noise='Poisson')
+E=plot_R(Rt_notnoisy0.013_S, v=0.013,'Weekly',noise='No')
+H=plot_R(Rt_notnoisy0.013D_S, v=0.013,'Daily',noise='No')
+ggarrange(C[[3]],A[[3]],D[[3]],B[[3]],H[[3]],E[[3]],
+          labels = c("a", "b","c","d","e","f"), 
+          common.legend = TRUE, legend = "bottom", nrow=3, ncol=2)
+ggsave(file = "EpiEstim_Simu.pdf", width = 7.30,height=7.55, units=c('in'))
+
 ```
 
 ```{r}

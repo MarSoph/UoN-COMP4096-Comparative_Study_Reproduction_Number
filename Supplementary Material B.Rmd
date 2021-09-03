@@ -377,8 +377,9 @@ plot_R=function(Rt,v=0, step, noise, data_R){
   Rt=cbind(Rt,original, DE)
   l=dim(Rt)[1]
   
-  Bias=mean(abs(Rt$Mean[3:l]-Rt$original[3:l]))
-  RMSE=rmse(Rt$original[3:l],Rt$Mean[3:l])
+  Rt=Rt[is.na(Rt$Mean)==FALSE,]
+  Bias=mean(abs(Rt$Mean-Rt$original))#mean absolute bias between estimated and true Rt
+  RMSE=rmse(Rt$original,Rt$Mean) #RMSE between estimated and true Rt
   
   gg=ggplot(Rt, aes(x=t_start))+
     labs(color='R')+
