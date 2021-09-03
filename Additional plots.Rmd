@@ -12,8 +12,6 @@ end='2021-05-30'
 data_day$Date=format(as.Date(data$Date), "%y/%m")
 data_day$Time=seq(as.Date(origin), as.Date(end), length.out=151)
 
-#Time=rep(seq(as.Date(origin), as.Date(end), length.out=10),each=15)
-
 labels=seq(as.Date(origin), as.Date(end), length.out=10)
 labels=format(labels, '%d/%m/%y')
 breaks=seq(1, 150, length.out=4)
