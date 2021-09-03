@@ -1,13 +1,12 @@
 ---
 subtitle: "EpiEstim Results"
 title: 'Supplementary Material A6'
-author: "Marina Sofokleous"
 output:
   pdf_document: default
   html_document: default
 ---
 ```{r setup, include=FALSE, message=FALSE, warning=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, eval = FALSE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
 ```{r Parameters and data}
