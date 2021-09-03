@@ -11,7 +11,7 @@ adding_noise_to_J=function(data,parms){
     lambda[i+1]=(u*g*data$I[i]+uA*g*data$A[i]+
                    uv*g*data$Iv[i])*888000 #calculate the number of reported cases each day
   }
-  noise=(rpois(length(lambda),lambda)) #simulate random poisson data with lambda equal 
+  noise=(rpois(length(lambda),lambda)) #simulate random poisson noise with lambda equal 
   #to the number of reported cases each day
   return(noise/888000) #returns the proportion of the population not the number of cases
 }
