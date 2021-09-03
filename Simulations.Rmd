@@ -1,7 +1,6 @@
 ---
 subtitle: "Data Simulation"
 title: 'Supplementary Material A1'
-author: "Marina Sofokleous"
 output:
   pdf_document: default
   html_document: default
