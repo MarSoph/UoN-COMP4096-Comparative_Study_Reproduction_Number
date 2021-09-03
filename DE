@@ -1,7 +1,6 @@
 ---
 subtitle: "DE Results"
 title: 'Supplementary Material A5'
-author: "Marina Sofokleous"
 output:
   pdf_document: default
   html_document: default
