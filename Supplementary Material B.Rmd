@@ -1,5 +1,7 @@
 ---
 title: "Supplementary Material B"
+author: "Marina Sofokleous / 14309406"
+
 date: "01/09/2021"
 output:
   pdf_document: 
@@ -14,12 +16,14 @@ output:
 knitr::opts_chunk$set(echo = TRUE, fig.cap = TRUE, message = FALSE, warning = FALSE)
 ```
 \newpage
+
+
 Supplementary Material B contains all the R code and results obtained by implementing three simpler models and exploring the resulting estimates of $R_t$ from the two methods, $EpiEstim$ and $DE$. 
 
-The three different models are the following:
-1. SEPIJAR - Includes no vaccinations, constant transsmition rates and does not take into account any control measures ($\rho$=0).\\
-2. SEPIJAR (b) - Includes no vaccinations, constant transsmition rates and takes into account the control measures taken ($\rho$ varies).\\
-3. SEPIJARV - Includes vaccinations with vaccination rate = 0.013, constant transsmition rates and takes into account the control measures taken ($\rho$ varies).\\
+The three different models are the following:\newline
+1. SEPIJAR - Includes no vaccinations, constant transsmition rates and does not take into account any control measures ($\rho$=0).\newline
+2. SEPIJAR (b) - Includes no vaccinations, constant transsmition rates and takes into account the control measures taken ($\rho$ varies).\newline
+3. SEPIJARV - Includes vaccinations with vaccination rate = 0.013, constant transsmition rates and takes into account the control measures taken ($\rho$ varies).\newline
 
 All three models were used for data simulation and specifically, the methodology performed for the study, as described in the Methodology chapter, was repeated for each model. The same functions used for the main study (Supplementary Material A) are simply modified to account for the changes in the parameters and can be found in section \textit{Functions} in the Supplementary Material B. The results obtained each time are shown after each command. Finally, the discussion of the findings can be found in the Discussion chapter of the Dissertation. 
 
@@ -375,6 +379,7 @@ plot_R=function(Rt,v=0, step, noise, data_R){
   names(Rt)=c('t_start','t_end','Mean','Std','Q0.025',
               'Q0.05','Q0.25','Median','Q0.75','Q0.95','Q0.975')
   Rt=cbind(Rt,original, DE)
+  
   l=dim(Rt)[1]
   
   Rt=Rt[is.na(Rt$Mean)==FALSE,]
@@ -585,13 +590,13 @@ OptimisationSimple_noVacc=function(v_value=0, niter, Data){
     out=ode(y=y0,times=seq(0,150, by=1),func = SEPIJAR_opt, parms=x, 
             method='ode45') #function to solve the ODEs given in SEPIJARV_opt
     out=as.data.frame(out)
-    #generating the incidence data from data given by 'out'
+    #generating the prevalence data from data given by 'out'
     rep=numeric(151)
     for (i in 1:151){
       rep[i+1]=u*g*out$I[i]+uA*g*out$A[i]+uv*g*out$Iv[i]
     }
-    error=rmse(Simu, rep) #RMSE between the original simulated incidence data 
-    return(error)          #and the incidence data generated using the parameter 
+    error=rmse(Simu, rep) #RMSE between the original simulated prevalence data 
+    return(error)          #and the prevalence data generated using the parameter 
   }                         #vector from the current generation
   #    parms=c(a1inv,a2inv,kinv,d, ninv, f, p,u, uA, g, linv,, b,db3, db5)
   #lower limit of each parameter
@@ -718,7 +723,7 @@ estimated_data_noVacc=function(par, v_value){
     for (i in 1:151){
       inc[i+1]=u*g*out$I[i]+uA*g*out$A[i]+uv*g*out$Iv[i]
     }
-    return(list(New_data=out, Incidence=inc))
+    return(list(New_data=out, Prevalence=inc))
 }
 ```
 
@@ -866,13 +871,13 @@ Optimisation=function(v_value, niter, Data){
     out=ode(y=y0,times=seq(0,150, by=1),func = SEPIJARV_opt, parms=x, 
             method='ode45') #function to solve the ODEs given in SEPIJARV_opt
     out=as.data.frame(out)
-    #generating the incidence data from data given by 'out'
+    #generating the prevalence data from data given by 'out'
     rep=numeric(151)
     for (i in 1:151){
       rep[i+1]=u*g*out$I[i]+uA*g*out$A[i]+uv*g*out$Iv[i]
     }
-    error=rmse(Simu, rep) #RMSE between the original simulated incidence data 
-    return(error)          #and the incidence data generated using the parameter 
+    error=rmse(Simu, rep) #RMSE between the original simulated prevalence data 
+    return(error)          #and the prevalence data generated using the parameter 
   }                         #vector from the current generation
   
   #lower limit of each parameter
@@ -1028,7 +1033,7 @@ estimated_data=function(par, v_value){
     for (i in 1:151){
       inc[i+1]=u*g*out$I[i]+uA*g*out$A[i]+uv*g*out$Iv[i]
     }
-    return(list(New_data=out, Incidence=inc))
+    return(list(New_data=out, Prevalence=inc))
 }
 ```
 
@@ -1076,7 +1081,7 @@ ggarrange(plot_simu_v_val(v_val=0,data=outSimple_no_rho)[[1]],
 ```
 
 
-## Noisy incidence data 
+## Noisy prevalence data 
 
 ```{r results='hide'}
 data=outSimple_no_rho
@@ -1093,10 +1098,10 @@ uv*g*data$Iv[i])*888000 #calculate the number of reported cases each day
 }
 noise=(rpois(length(lambda),lambda)) #simulate random poisson data with lambda equal
 #to the number of reported cases each day
-incidenceSimple_no_rho=noise/888000 
-incidenceSimple_no_rho=as.data.frame((incidenceSimple_no_rho))
-names(incidenceSimple_no_rho)=c('x')
-#plot(incidenceSimple_no_rho$x)
+prevalenceSimple_no_rho=noise/888000 
+prevalenceSimple_no_rho=as.data.frame((prevalenceSimple_no_rho))
+names(prevalenceSimple_no_rho)=c('x')
+#plot(prevalenceSimple_no_rho$x)
 ```
 
 ## Estimating Rt using the NGM
@@ -1108,8 +1113,8 @@ Rt_Simple_no_rho=calc_Rt_noVacc(v_value=0, data=outSimple_no_rho, ro=numeric(151
 ## EpiEstim
 
 ```{r, warning=FALSE, message=FALSE, fig.cap='The daily and weekly estimates of $R_t$ using the EpiEstim and the data obtained by the SEPIJAR model with zero stingency index'}
-RtU_Epi_D_no_rho=Rt_Unc_daily(incidenceSimple_no_rho)
-RtU_Epi_W_no_rho=Rt_Unc_weekly(incidenceSimple_no_rho)
+RtU_Epi_D_no_rho=Rt_Unc_daily(prevalenceSimple_no_rho)
+RtU_Epi_W_no_rho=Rt_Unc_weekly(prevalenceSimple_no_rho)
 B_no_rho=plot_R(RtU_Epi_W_no_rho,v=0,'Weekly',noise='Poisson', data=Rt_Simple_no_rho)
 C_no_rho=plot_R(RtU_Epi_D_no_rho,v=0,'Daily',noise='Poisson', data=Rt_Simple_no_rho)
 ggarrange(C_no_rho[[3]], B_no_rho[[3]], labels=c('A','B'), 
@@ -1119,7 +1124,7 @@ ggsave(file='Simpler_EpiEstim_Res_no_rho.pdf', width = 7.30,height=7.5, units=c(
 ## DE
 
 ```{r eval=FALSE}
-#OSimple_no_rho=OptimisationSimple_noVacc(niter=200, Data=incidenceSimple_no_rho)
+#OSimple_no_rho=OptimisationSimple_noVacc(niter=200, Data=prevalenceSimple_no_rho)
 #write.csv(OSimple_no_rho[[1]][[1]],'OptSimple_no_rho_par2.csv')
 #write.csv(OSimple_no_rho[[3]],'OptSimple_no_rho_parameters.csv')
 ```
@@ -1139,22 +1144,22 @@ plot(Rt_DE_Simpler_no_rho[[2]]$t, Rt_DE_Simpler_no_rho[[2]]$Rt, type='l')
 lines(Rt_Simple_no_rho$Rt, col='red')
 ```
 
-```{r fig.cap='Resulting incidence data and $R_t$ estimates using SEPIJAR model and DE'}
+```{r fig.cap='Resulting prevalence data and $R_t$ estimates using SEPIJAR model and DE'}
 # --- Plotting the Results from DE ---#
-SimplerIncidence_DE_Results_no_rho=cbind(1:152,incidenceSimple_no_rho,
+SimplerPrevalence_DE_Results_no_rho=cbind(1:152,prevalenceSimple_no_rho,
                                          Generated_data_no_rho[[2]])
-names(SimplerIncidence_DE_Results_no_rho)=c('Days','Simulated','Generated')
+names(SimplerPrevalence_DE_Results_no_rho)=c('Days','Simulated','Generated')
 SimplerRt_DE_Results_no_rho=cbind(Rt_Simple_no_rho, Rt_DE_Simpler_no_rho[[2]]$Rt)
 names(SimplerRt_DE_Results_no_rho)=c('True','Days','Estimated')
 
-gg=ggplot(SimplerIncidence_DE_Results_no_rho,aes(x=Days))+
+gg=ggplot(SimplerPrevalence_DE_Results_no_rho,aes(x=Days))+
     geom_line(aes(y=Simulated*888000, 
                   col='Simulated (True)'))+
     geom_line(aes(y=Generated*888000, 
                   col='Generated'))+
-    labs(color='Incidence Data')+
+    labs(color='Prevalence Data')+
     ylab('Daily number of new cases')+
-    ggtitle(expression('Incidence data / SEPIJAR model /'~rho ~'=0'))+
+    ggtitle(expression('Prevalence data / SEPIJAR model /'~rho ~'=0'))+
     theme(legend.key.size = unit(5, 'mm'), 
           plot.title = element_text(size = unit(9,'cm')),
           axis.text = element_text(size = unit(7,'cm')),
@@ -1208,7 +1213,7 @@ ggarrange(plot_simu_v_val(v_val=0,data=outSimple)[[1]],
           plot_simu_v_val(v_val=0,data=outSimple)[[2]])
 ```
 
-## Noisy incidence data 
+## Noisy prevalence data 
 ```{r}
 data=outSimple
 parms=c(0.9,0.9,1/3,0.75)
@@ -1224,10 +1229,10 @@ uv*g*data$Iv[i])*888000 #calculate the number of reported cases each day
 }
 noise=(rpois(length(lambda),lambda)) #simulate random poisson data with lambda equal
 #to the number of reported cases each day
-incidenceSimple=noise/888000 
-incidenceSimple=as.data.frame((incidenceSimple))
-names(incidenceSimple)=c('x')
-#plot(incidenceSimple$x)
+prevalenceSimple=noise/888000 
+prevalenceSimple=as.data.frame((prevalenceSimple))
+names(prevalenceSimple)=c('x')
+#plot(prevalenceSimple$x)
 ```
 
 ## Estimating Rt using the NGM
@@ -1242,8 +1247,8 @@ Rt_Simple=calc_Rt_noVacc(v_value=0, data=outSimple, ro=ro)[[2]]
 ## EpiEstim
 
 ```{r, warning=FALSE, message=FALSE, fig.cap='The daily and weekly estimates of $R_t$ using the EpiEstim and the data obtained by the SEPIJAR model with varying stingency index'}
-RtU_Epi_D=Rt_Unc_daily(incidenceSimple)
-RtU_Epi_W=Rt_Unc_weekly(incidenceSimple)
+RtU_Epi_D=Rt_Unc_daily(prevalenceSimple)
+RtU_Epi_W=Rt_Unc_weekly(prevalenceSimple)
 B=plot_R(RtU_Epi_W,v=0,'Weekly',noise='Poisson', data=Rt_Simple)
 C=plot_R(RtU_Epi_D,v=0,'Daily',noise='Poisson', data=Rt_Simple)
 ggarrange(C[[3]],B[[3]], labels=c('A','B'), nrow=2, common.legend = FALSE ,
@@ -1271,21 +1276,21 @@ plot(Rt_DE_Simpler[[2]]$t, Rt_DE_Simpler[[2]]$Rt, type='l')
 lines(Rt_Simple$Rt, col='red')
 ```
 
-```{r fig.cap='Resulting incidence data and Rt estimates using the SEPIJAR (b) model and DE'}
+```{r fig.cap='Resulting prevalence data and Rt estimates using the SEPIJAR (b) model and DE'}
 # --- Plotting the Results from DE ---#
-SimplerIncidence_DE_Results=cbind(1:152,incidenceSimple, Generated_data[[2]])
-names(SimplerIncidence_DE_Results)=c('Days','Simulated','Generated')
+SimplerPrevalence_DE_Results=cbind(1:152,prevalenceSimple, Generated_data[[2]])
+names(SimplerPrevalence_DE_Results)=c('Days','Simulated','Generated')
 SimplerRt_DE_Results=cbind(Rt_Simple, Rt_DE_Simpler[[2]]$Rt)
 names(SimplerRt_DE_Results)=c('True','Days','Estimated')
 
-gg=ggplot(SimplerIncidence_DE_Results,aes(x=Days))+
+gg=ggplot(SimplerPrevalence_DE_Results,aes(x=Days))+
     geom_line(aes(y=Simulated*888000, 
                   col='Simulated (True)'))+
     geom_line(aes(y=Generated*888000, 
                   col='Generated'))+
-    labs(color='Incidence Data')+
+    labs(color='Prevalence Data')+
     ylab('Daily number of new cases')+
-    ggtitle(paste('Incidence data / SEPIJAR model'))+
+    ggtitle(paste('Prevalence data / SEPIJAR model'))+
     theme(legend.key.size = unit(5, 'mm'), 
           plot.title = element_text(size = unit(9,'cm')),
           axis.text = element_text(size = unit(7,'cm')),
@@ -1320,9 +1325,9 @@ rmse(SimplerRt_DE_Results$True,SimplerRt_DE_Results$Estimated)
 
 # Simulate data with constant $\beta$'s, vaccination rate 0.013 and varying stringency index 
 
-## Noisy incidence data
+## Noisy prevalence data
 
-```{r fig.cap='Simulated incidence data using the SEPIJARV model'}
+```{r fig.cap='Simulated prevalence data using the SEPIJARV model'}
 # --- Simulating data from the SEPIJARV model with v=0.013, 
    # constant transmission rates with b1=0.3 and varying rho --- #
 
@@ -1340,7 +1345,7 @@ outSimple_013=as.data.frame(ode(y=y, parms=parms, times=seq(0,150),
 ggarrange(plot_simu_v_val(v_val=0.013,data=outSimple_013)[[1]],
           plot_simu_v_val(v_val=0.013,data=outSimple_013)[[2]])
 
-## --- Incidence data --- ##
+## --- Prevalence data --- ##
 data=outSimple_013
 parms=c(0.9,0.9,1/3,0.75)
 u=parms[1]
@@ -1355,10 +1360,10 @@ uv*g*data$Iv[i])*888000 #calculate the number of reported cases each day
 }
 noise=(rpois(length(lambda),lambda)) #simulate random poisson data with lambda equal
 #to the number of reported cases each day
-incidenceSimple_013=noise/888000 
-incidenceSimple_013=as.data.frame((incidenceSimple_013))
-names(incidenceSimple_013)=c('x')
-#plot(incidenceSimple_013$x)
+prevalenceSimple_013=noise/888000 
+prevalenceSimple_013=as.data.frame((prevalenceSimple_013))
+names(prevalenceSimple_013)=c('x')
+#plot(prevalenceSimple_013$x)
 ```
 
 ## Estimating Rt using the NGM
@@ -1373,8 +1378,8 @@ Rt_Simple_013=calc_Rt(v_value=0.013, data=outSimple_013, ro=ro)[[2]]
 ## EpiEstim
 
 ```{r fig.cap='The daily and weekly estimates of $R_t$ using the EpiEstim and the data obtained by the SEPIJARV model with varying stingency index'}
-RtU_Epi_D_013=Rt_Unc_daily(incidenceSimple_013)
-RtU_Epi_W_013=Rt_Unc_weekly(incidenceSimple_013)
+RtU_Epi_D_013=Rt_Unc_daily(prevalenceSimple_013)
+RtU_Epi_W_013=Rt_Unc_weekly(prevalenceSimple_013)
 B=plot_R(RtU_Epi_W_013,v=0.013,'Weekly',noise='Poisson', data=Rt_Simple_013)
 C=plot_R(RtU_Epi_D_013,v=0.013,'Daily',noise='Poisson', data=Rt_Simple_013)
 
@@ -1387,7 +1392,7 @@ ggsave(file='Simpler_EpiEstim_Res_013.pdf', width = 7.30,height=7.5, units=c('in
 ## DE
 
 ```{r eval=FALSE}
-#OSimple_0.013=Optimisation(v_value = 0.013, niter=200, Data =incidenceSimple_013)
+#OSimple_0.013=Optimisation(v_value = 0.013, niter=200, Data =prevalenceSimple_013)
 #write.csv(OSimple_0.013[[1]][[1]],'OptSimple013_par2.csv')
 #write.csv(OSimple_0.013[[3]],'OptSimple013_parameters.csv')
 ```
@@ -1406,22 +1411,22 @@ plot(Rt_DE_Simpler_013[[2]]$t, Rt_DE_Simpler_013[[2]]$Rt, type='l')
 lines(Rt_Simple_013$Rt, col='red')
 ```
 
-```{r fig.cap='Resulting incidence data and Rt estimates using the SEPIJARV model and DE'}
+```{r fig.cap='Resulting prevalence data and Rt estimates using the SEPIJARV model and DE'}
 # --- Plotting the Results from DE ---#
-SimplerIncidence_DE_Results_013=cbind(1:152,incidenceSimple_013, Generated_data_013[[2]])
-names(SimplerIncidence_DE_Results_013)=c('Days','Simulated','Generated')
+SimplerPrevalence_DE_Results_013=cbind(1:152,prevalenceSimple_013, Generated_data_013[[2]])
+names(SimplerPrevalence_DE_Results_013)=c('Days','Simulated','Generated')
 
 SimplerRt_DE_Results_013=cbind(Rt_Simple_013, Rt_DE_Simpler_013[[2]]$Rt)
 names(SimplerRt_DE_Results_013)=c('True','Days','Estimated')
 
-gg013=ggplot(SimplerIncidence_DE_Results_013,aes(x=Days))+
+gg013=ggplot(SimplerPrevalence_DE_Results_013,aes(x=Days))+
     geom_line(aes(y=Simulated*888000, 
                   col='Simulated (True)'))+
     geom_line(aes(y=Generated*888000, 
                   col='Generated'))+
-    labs(color='Incidence Data')+
+    labs(color='Prevalence Data')+
     ylab('Daily number of new cases')+
-    ggtitle(paste('Incidence data / SEPIJARV model'))+
+    ggtitle(paste('Prevalence data / SEPIJARV model'))+
     theme(legend.key.size = unit(3, 'mm'), 
           plot.title = element_text(size = unit(9,'cm')),
           axis.text = element_text(size = unit(7,'cm')),

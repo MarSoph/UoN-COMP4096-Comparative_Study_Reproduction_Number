@@ -144,7 +144,7 @@ Optimisation=function(v_value, niter){
       
       # The simulated data without noise
       #Simu=read.csv('Simu0_013.csv')
-      #generating incidence data from the not noisy simulated data
+      #generating prevalence data from the not noisy simulated data
       #Srep=numeric(151)
       #original_par=c(0.9,0.9,1/3,0.75)
       #uI=original_par[1]
@@ -153,7 +153,7 @@ Optimisation=function(v_value, niter){
       #uAI=original_par[4]
       #for (i in 1:151){
        # Srep[i+1]=uI*gI*Simu$I[i]+uAI*gI*Simu$A[i]+uvI*gI*Simu$Iv[i] 
-      #} #not noisy incidence data
+      #} #not noisy prevalence data
       #Simu=Srep
     }
     if (v_value==0.005){
@@ -183,13 +183,13 @@ Optimisation=function(v_value, niter){
     out=ode(y=y0,times=seq(0,150, by=1),func = SEPIJARV_opt, parms=x, 
             method='ode45') #function to solve the ODEs given in SEPIJARV_opt
     out=as.data.frame(out)
-    #generating the incidence data from data given by 'out'
+    #generating the prevalence data from data given by 'out'
     rep=numeric(151)
     for (i in 1:151){
       rep[i+1]=u*g*out$I[i]+uA*g*out$A[i]+uv*g*out$Iv[i]
     }
-    error=rmse(Simu, rep) #RMSE between the original simulated incidence data 
-    return(error)          #and the incidence data generated using the parameter 
+    error=rmse(Simu, rep) #RMSE between the original simulated prevalence data 
+    return(error)          #and the prevalence data generated using the parameter 
   }                         #vector from the current generation
   
   #lower limit of each parameter
@@ -686,7 +686,7 @@ ggplot(period_durations, aes(x=par, y=variables, group=par, color=variable)) +
 
 ggsave(file = "DEparrates005.pdf", width = 7.30,height=3.9, units=c('in'))
 
-# --- Generating the Incidence data --- #
+# --- Generating the Prevalence data --- #
 SEPIJARV_opt=function(t,y,parms){
     a1_inv=parms[1]
     a1=1/a1_inv
@@ -758,7 +758,7 @@ SEPIJARV_opt=function(t,y,parms){
 }
 
 estimated_data=function(par, v_value){
-  'generates incidence and full epidemiological data
+  'generates prevalence and full epidemiological data
     from the parameter vector returned by DE'
     y0=c(S=865055,E=7973,
          P=4000, I=280,J=2520, A=1200, Tv=0, V=0, Ev=0,
@@ -778,10 +778,10 @@ estimated_data=function(par, v_value){
     for (i in 1:151){
       inc[i+1]=u*g*out$I[i]+uA*g*out$A[i]+uv*g*out$Iv[i]
     }
-    return(list(New_data=out, Incidence=inc))
+    return(list(New_data=out, Prevalence=inc))
 }
 
-#--- Generating the incidence and full data using the optimal parameters
+#--- Generating the prevalence and full data using the optimal parameters
                                                         #given by DE ---#
 data_out_005=estimated_data(par=DE005res$Optimal[1:19] ,v_value=0.005)
 data_out_013=estimated_data(par=DE013res$Optimal[1:19], v_value=0.013)
@@ -802,10 +802,10 @@ relRMSE013=(DE013[[2]]%>%filter(MinVal==min(MinVal))%>%select(MinVal))[1,]/
 
   
 ```{r}
-#--- Plot the generated and originally simulated incidence data 
+#--- Plot the generated and originally simulated prevalence data 
                                                           #on the same plot---#
 compare_inc_plot=function(inc, v_value){
-  'Plots the generated and simulated (original) incidence data 
+  'Plots the generated and simulated (original) prevalence data 
 on the same figure'
   if (v_value==0.013){
     simu=read.csv('SimuNoisy0_013.csv')
@@ -820,9 +820,9 @@ on the same figure'
   gg=ggplot(simu,aes(x=Days))+
     geom_line(aes(y=SimulatedInc*888000,col='Simulated (True)'))+
     geom_line(aes(y=GeneratedInc*888000,col='Generated'))+
-    labs(color='Incidence Data')+
+    labs(color='Prevalence Data')+
     ylab('Daily number of new cases')+
-    ggtitle(paste('Incidence data for',v_value,'vaccination rate'))+
+    ggtitle(paste('Prevalence data for',v_value,'vaccination rate'))+
     theme(legend.key.size = unit(7, 'mm'), 
           plot.title = element_text(size = unit(11,'cm')),
           axis.text = element_text(size = unit(8,'cm')),
@@ -837,7 +837,7 @@ on the same figure'
 
 
 ```{r}
-#---Plot/Compare the generated and the simulated/true incidence data---#
+#---Plot/Compare the generated and the simulated/true prevalence data---#
 GInc05=compare_inc_plot(data_out_005[[2]], v_value=0.005)
 ggsave(file = "DEGInc05.pdf", width = 7.30,height=3.3, units=c('in'))
 GInc13=compare_inc_plot(data_out_013[[2]], v_value=0.013)
@@ -913,7 +913,7 @@ data_out_013_no_noise=estimated_data(par= opt_par_no_noise$optPar,
 
 #The simulated data without noise
 Simu=read.csv('Simu0_013.csv')
-      #generating incidence data from the not noisy simulated data
+      #generating prevalence data from the not noisy simulated data
 Srep=numeric(151)
 original_par=c(0.9,0.9,1/3,0.75)
 uI=original_par[1]
@@ -922,7 +922,7 @@ gI=original_par[3]
 uAI=original_par[4]
 for (i in 1:151){
   Srep[i+1]=uI*gI*Simu$I[i]+uAI*gI*Simu$A[i]+uvI*gI*Simu$Iv[i] 
-} #not noisy incidence data
+} #not noisy prevalence data
 Simu_013_no_noise=Srep
 
 
@@ -933,9 +933,9 @@ names(No_noise_data)=c('Days','SimulatedInc', 'GeneratedInc')
 gg=ggplot(No_noise_data, aes(x=Days))+
     geom_line(aes(y=SimulatedInc*888000,col='Simulated (True)'))+
     geom_line(aes(y=GeneratedInc*888000,col='Generated'))+
-    labs(color='Incidence Data')+
+    labs(color='Prevalence Data')+
     ylab('Daily number of new cases')+
-    ggtitle(paste('Incidence data with no added noise'))+
+    ggtitle(paste('Prevalence data with no added noise'))+
     theme(legend.key.size = unit(7, 'mm'), 
           plot.title = element_text(size = unit(11,'cm')),
           axis.text = element_text(size = unit(8,'cm')),

@@ -2,14 +2,14 @@
 ```{r}
 library(ggplot2)
 
-#The published incidence data from the Republic of Cyprus were taken from:
+#The published prevalence data from the Republic of Cyprus were taken from:
 #Ministry of Health (2021b), ‘Cyprus Covid-19 open data’. Accessed: 08-07-2021.
 #URL: https://www.data.gov.cy/search/type/dataset
 
 data=read.csv('CY Covid19 - AntigenTests Data.csv')[1:151,1:5]
 ```
 ```{r}
-#--- Plot of the published incidence data from Cyprus ---#
+#--- Plot of the published prevalence data from Cyprus ---#
 
 data_day=data
 origin='2021-01-01'

@@ -479,7 +479,7 @@ ggsave(file='Rtsimu.pdf', width = 7.50,height=3.3, units=c('in'))
 ```
 
 ```{r}
-# --- Plotting both Rt and simulated incidence data on a combined figure --- #
+# --- Plotting both Rt and simulated prevalence data on a combined figure --- #
 simuInc=cbind(S013=read.csv('SimuNoisy0_013.csv'),
               S005=read.csv('SimuNoisy0_005.csv')$x)
 
@@ -489,7 +489,7 @@ A=ggplot(simuInc,aes(x=S013.X))+
     labs(color='Vaccination rate')+
     ylab('Proportion on the population')+
     xlab('Days')+
-    ggtitle(paste('The simulated incidence data'))+
+    ggtitle(paste('The simulated prevalence data'))+
     theme(legend.key.size = unit(7, 'mm'), 
           plot.title = element_text(size = unit(9,'cm')),
           axis.text = element_text(size = unit(8,'cm')),

@@ -28,7 +28,7 @@ SimuNoisy013=read.csv('SimuNoisy0_013.csv')
 SimuNoisy005=read.csv('SimuNoisy0_005.csv')
 
 Simu=read.csv('Simu0_013.csv')
-Srep=numeric(151)#generating incidence data from the not noisy simulated data
+Srep=numeric(151)#generating prevalence data from the not noisy simulated data
 for (i in 1:151){ 
   Srep[i+1]=u*g*Simu$I[i]+uA*g*Simu$A[i]+uv*g*Simu$Iv[i]
 }
@@ -36,7 +36,7 @@ SimuNotNoisy013=as.data.frame(Srep)
 names(SimuNotNoisy013)=c('x')
 
 Simu=read.csv('Simu0_005.csv')
-Srep=numeric(151)#generating incidence data from the not noisy simulated data
+Srep=numeric(151)#generating prevalence data from the not noisy simulated data
 for (i in 1:151){ 
   Srep[i+1]=u*g*Simu$I[i]+uA*g*Simu$A[i]+uv*g*Simu$Iv[i]
 }
