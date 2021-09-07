@@ -903,3 +903,49 @@ mean(abs(DERt005$Rt-DERt005$True))
 rmse(DERt005$True, DERt005$Rt)
 
 ```
+
+```{r}
+# --- Comparison of DE optimisation using data with and without added noise ---#
+
+opt_par_no_noise=DE013[[2]][DE013[[2]]$Scenario=='No noise added',]
+data_out_013_no_noise=estimated_data(par= opt_par_no_noise$optPar,
+                                     v_value=0.013) #generated data
+
+#The simulated data without noise
+Simu=read.csv('Simu0_013.csv')
+      #generating incidence data from the not noisy simulated data
+Srep=numeric(151)
+original_par=c(0.9,0.9,1/3,0.75)
+uI=original_par[1]
+uvI=original_par[2]
+gI=original_par[3]
+uAI=original_par[4]
+for (i in 1:151){
+  Srep[i+1]=uI*gI*Simu$I[i]+uAI*gI*Simu$A[i]+uvI*gI*Simu$Iv[i] 
+} #not noisy incidence data
+Simu_013_no_noise=Srep
+
+
+No_noise_data=cbind(seq(1,152), Simu_013_no_noise ,data_out_013_no_noise[[2]])
+No_noise_data=as.data.frame(No_noise_data)
+names(No_noise_data)=c('Days','SimulatedInc', 'GeneratedInc')
+  
+gg=ggplot(No_noise_data, aes(x=Days))+
+    geom_line(aes(y=SimulatedInc*888000,col='Simulated (True)'))+
+    geom_line(aes(y=GeneratedInc*888000,col='Generated'))+
+    labs(color='Incidence Data')+
+    ylab('Daily number of new cases')+
+    ggtitle(paste('Incidence data with no added noise'))+
+    theme(legend.key.size = unit(7, 'mm'), 
+          plot.title = element_text(size = unit(11,'cm')),
+          axis.text = element_text(size = unit(8,'cm')),
+          axis.title = element_text(size = unit(11,'cm')),
+          legend.text = element_text(size = unit(9, 'mm')),
+          legend.title =element_text(size = unit(9, 'mm')),
+          legend.position = 'bottom')
+print(gg)
+ggsave(file='DEIncNotNoisy.pdf', width = 5.30,height=3.5, units=c('in'))
+
+relRMSE013_no_noise=(opt_par_no_noise$MinVal)[1]/sum(data_out_013_no_noise[[2]])
+relRMSE013_no_noise
+```
